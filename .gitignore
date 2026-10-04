@@ -1,0 +1,9 @@
+# OS / editor
+.DS_Store
+*.swp
+
+# Amplify local artifacts
+node_modules/
+amplify/\#current-cloud-backend
+amplify/.config/local-*
+dist/
