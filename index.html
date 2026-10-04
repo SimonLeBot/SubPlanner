@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b7a3b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Team Rotation</title>
+<link rel="manifest" href='data:application/manifest+json,{"name":"Team Rotation","short_name":"Rotation","start_url":".","display":"standalone","background_color":"%23062b1a","theme_color":"%230b7a3b","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 192 192%22%3E%3Crect width=%22192%22 height=%22192%22 rx=%2232%22 fill=%22%230b7a3b%22/%3E%3Ccircle cx=%2296%22 cy=%2296%22 r=%2250%22 fill=%22none%22 stroke=%22white%22 stroke-width=%228%22/%3E%3Cpath d=%22M96 50 L110 86 L148 86 L118 108 L130 144 L96 122 L62 144 L74 108 L44 86 L82 86 Z%22 fill=%22white%22/%3E%3C/svg%3E","sizes":"192x192","type":"image/svg+xml"}]}'>
+<style>
+  :root{
+    --bg:#062b1a; --surface:#0d3d27; --surface2:#114a30; --line:#1c6342;
+    --text:#eaf6ee; --muted:#9fc7b0; --accent:#2fe08a; --accent2:#19b36b;
+    --danger:#ff6b6b; --warn:#ffc24b; --on:#2fe08a; --off:#ff8a5c;
+    --gk:#ffd24b; --def:#5ab6ff; --mid:#b58bff; --atk:#ff7a9c;
+    --radius:16px; --tap:52px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text);
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    min-height:100vh;
+  }
+  .wrap{max-width:720px; margin:0 auto; padding:14px 14px 40px;}
+  h1{font-size:1.3rem; margin:4px 0 2px; display:flex; align-items:center; gap:8px;}
+  h1 .ball{font-size:1.1rem;}
+  .sub{color:var(--muted); font-size:.82rem; margin:0 0 14px;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:14px;}
+  .card h2{font-size:1rem; margin:0 0 10px; color:var(--text);}
+  label{display:block; font-size:.8rem; color:var(--muted); margin:10px 0 4px;}
+  input,select,textarea{
+    width:100%; background:var(--surface2); color:var(--text); border:1px solid var(--line);
+    border-radius:12px; padding:12px; font-size:1rem; min-height:var(--tap);
+  }
+  textarea{min-height:120px; resize:vertical; line-height:1.5;}
+  .row{display:flex; gap:10px;} .row>*{flex:1;}
+  .grid4{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+  button{
+    width:100%; border:none; border-radius:12px; padding:14px; font-size:1rem; font-weight:700;
+    background:var(--accent2); color:#042; min-height:var(--tap); cursor:pointer;
+  }
+  button.primary{background:var(--accent); color:#032; font-size:1.08rem;}
+  button.ghost{background:var(--surface2); color:var(--text); border:1px solid var(--line); font-weight:600;}
+  button.warn{background:var(--warn); color:#3a2a00;}
+  button.danger{background:var(--danger); color:#410000;}
+  button:disabled{opacity:.45;}
+  .btnrow{display:flex; gap:10px; margin-top:12px;} .btnrow>*{flex:1;}
+  .hint{font-size:.74rem; color:var(--muted); margin-top:6px;}
+  .pill{display:inline-block; font-size:.68rem; font-weight:700; padding:3px 8px; border-radius:999px; letter-spacing:.03em;}
+  .pos-GK{background:var(--gk); color:#3a2e00;}
+  .pos-DEF{background:var(--def); color:#002740;}
+  .pos-MID{background:var(--mid); color:#1c0040;}
+  .pos-ATK{background:var(--atk); color:#40001a;}
+  .pos-BENCH{background:var(--surface2); color:var(--muted); border:1px solid var(--line);}
+  .hidden{display:none !important;}
+
+  /* ===== Formation editor ===== */
+  .formrow{display:grid; grid-template-columns:1fr 70px; gap:8px; align-items:center; margin-bottom:8px;}
+  .formrow .lbl{display:flex; align-items:center; gap:8px; font-size:.9rem;}
+  .counter{display:flex; align-items:center; gap:0;}
+  .counter button{width:40px; min-height:40px; padding:0; font-size:1.3rem; border-radius:10px; background:var(--surface2); color:var(--text); border:1px solid var(--line);}
+  .counter .val{width:40px; text-align:center; font-weight:700; font-size:1.1rem;}
+  .tacticsum{font-size:.85rem; color:var(--muted); margin-top:8px;}
+  .preset{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px;}
+  .preset button{width:auto; flex:0 0 auto; padding:8px 12px; min-height:40px; font-size:.82rem; background:var(--surface2); color:var(--text); border:1px solid var(--line); font-weight:600;}
+
+  /* ===== Game screen ===== */
+  .clock{font-variant-numeric:tabular-nums; font-size:3.4rem; font-weight:800; text-align:center; letter-spacing:.02em; line-height:1;}
+  .clock.firing{color:var(--warn);}
+  .clockmeta{text-align:center; color:var(--muted); font-size:.82rem; margin-top:4px;}
+  .nextbar{text-align:center; margin:10px 0 2px; font-size:.9rem;}
+  .nextbar b{color:var(--accent);}
+  .progress{height:8px; background:var(--surface2); border-radius:999px; overflow:hidden; margin:10px 0;}
+  .progress>span{display:block; height:100%; background:var(--accent); transition:width .4s;}
+
+  .subpanel{border:1px solid var(--line); border-radius:14px; padding:12px; margin-top:12px; background:var(--surface2);}
+  .subpanel.flash{animation:flash 1s ease-in-out 3;}
+  @keyframes flash{0%,100%{background:var(--surface2);}50%{background:#1d6b45;}}
+  .swap{display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px dashed var(--line); font-size:.95rem;}
+  .swap:last-child{border-bottom:none;}
+  .swap .off{color:var(--off); font-weight:700;}
+  .swap .on{color:var(--on); font-weight:700;}
+  .swap .arr{color:var(--muted);}
+  .swap .ppos{margin-left:auto;}
+
+  table{width:100%; border-collapse:collapse; font-size:.9rem;}
+  th,td{text-align:left; padding:7px 6px; border-bottom:1px solid var(--line);}
+  th{color:var(--muted); font-weight:600; font-size:.76rem; text-transform:uppercase; letter-spacing:.04em;}
+  td.time{font-variant-numeric:tabular-nums; text-align:right; color:var(--muted);}
+  .fieldwrap{position:relative; width:100%; flex:1 1 auto; min-height:150px; margin-top:10px; background:linear-gradient(180deg,#0e5230,#0a3d24); border:2px solid var(--line); border-radius:14px; overflow:hidden;}
+  .fieldwrap .mid{position:absolute; left:0; right:0; top:50%; height:2px; background:rgba(255,255,255,.25);}
+  .fieldwrap .circle{position:absolute; left:50%; top:50%; width:28%; aspect-ratio:1; transform:translate(-50%,-50%); border:2px solid rgba(255,255,255,.25); border-radius:50%;}
+  .player{position:absolute; transform:translate(-50%,-50%); width:52px; text-align:center;}
+  .player .dot{width:26px; height:26px; margin:0 auto; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.68rem; color:#042; box-shadow:0 2px 6px rgba(0,0,0,.4);}
+  .player .nm{font-size:.6rem; margin-top:1px; color:var(--text); text-shadow:0 1px 2px #000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .player .sidelbl{font-size:.54rem; margin-top:0; color:var(--muted); font-weight:700; letter-spacing:.02em; text-shadow:0 1px 2px #000;}
+  .dot.GK{background:var(--gk);} .dot.DEF{background:var(--def);} .dot.MID{background:var(--mid);} .dot.ATK{background:var(--atk);}
+  .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#0a3d24; border:1px solid var(--accent); color:var(--text); padding:12px 18px; border-radius:12px; font-size:.9rem; z-index:50; box-shadow:0 6px 20px rgba(0,0,0,.5); max-width:92%;}
+  .gkpick{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;}
+  .gkpick button{width:auto; flex:0 0 auto; padding:8px 12px; min-height:40px; font-size:.85rem; background:var(--surface2); border:1px solid var(--line); color:var(--text); font-weight:600;}
+  .gkpick button.sel{background:var(--gk); color:#3a2e00; border-color:var(--gk);}
+  .half-badge{display:inline-block; font-size:.75rem; color:var(--muted);}
+  .warnbox{background:#4a1d1d; border:1px solid var(--danger); color:#ffd8d8; padding:10px; border-radius:12px; font-size:.84rem; margin-top:10px;}
+  .okbox{background:#143f2a; border:1px solid var(--accent2); color:var(--text); padding:10px; border-radius:12px; font-size:.84rem; margin-top:10px;}
+  footer{color:var(--muted); font-size:.72rem; text-align:center; margin-top:20px;}
+  .foldhdr{display:flex; justify-content:space-between; align-items:center; cursor:pointer;}
+  .foldhdr .chev{color:var(--muted);}
+  /* manual-sub modal */
+  .modal{position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;}
+  .modal.hidden{display:none;}
+  .modalbox{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; max-width:420px; width:100%; max-height:80vh; overflow-y:auto;}
+  .modalhdr{display:flex; justify-content:space-between; align-items:center; font-size:1.05rem; font-weight:700; margin-bottom:8px;}
+  .modalx{width:auto; min-height:auto; padding:4px 10px; background:var(--surface2); border:1px solid var(--line); color:var(--text); border-radius:8px; font-size:1rem;}
+  #subModalList button.takeoff{background:#4a1d1d; border-color:var(--danger); color:#ffd8d8;}
+  /* two cards side by side; stack only on very narrow screens */
+  .sidebyside{display:flex; gap:14px; align-items:stretch;}
+  .sidebyside>.card{flex:1 1 0; min-width:0; margin-bottom:14px; display:flex; flex-direction:column;}
+  @media(max-width:380px){ .sidebyside{flex-direction:column; gap:0;} }
+  /* game plan grid */
+  table.plan{border-collapse:collapse; font-size:.72rem; white-space:nowrap;}
+  table.plan th,table.plan td{border:1px solid var(--line); padding:4px 6px; text-align:center;}
+  table.plan th{color:var(--muted); font-weight:600; position:sticky;}
+  table.plan th.pname{text-align:left; position:sticky; left:0; background:var(--surface); z-index:2; min-width:84px;}
+  table.plan td.pname{text-align:left; position:sticky; left:0; background:var(--surface); z-index:1; font-weight:600;}
+  table.plan td.cur,table.plan th.cur{background:rgba(47,224,138,.12);}
+  table.plan td.cell-GK{background:var(--gk); color:#3a2e00; font-weight:700;}
+  table.plan td.cell-DEF{background:rgba(90,182,255,.25);}
+  table.plan td.cell-MID{background:rgba(181,139,255,.25);}
+  table.plan td.cell-ATK{background:rgba(255,122,156,.25);}
+  table.plan td.cell-INJ{background:#4a1d1d; color:#ffd8d8;}
+  table.plan td.bench{color:var(--muted);}
+  .availbtn{width:auto; flex:0 0 auto; padding:8px 12px; min-height:40px; font-size:.85rem; background:var(--surface2); border:1px solid var(--line); color:var(--text); font-weight:600;}
+  .availbtn.injured{background:#4a1d1d; border-color:var(--danger); color:#ffd8d8;}
+
+  /* ===== Printable report (Save as PDF) ===== */
+  #printReport{display:none;}
+  #printReport table{border-collapse:collapse; width:100%; margin:8px 0 18px; font-size:12px;}
+  #printReport th,#printReport td{border:1px solid #999; padding:4px 7px; text-align:left;}
+  #printReport th{background:#eee;}
+  #printReport td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  #printReport .pgrid td,#printReport .pgrid th{text-align:center; font-size:10px; white-space:nowrap;}
+  #printReport .pgrid td.pn,#printReport .pgrid th.pn{text-align:left;}
+  @media print {
+    /* hide the live app; show only the report, in plain black-on-white */
+    body > .wrap { display:none !important; }
+    #printReport { display:block !important; color:#000; background:#fff; padding:0 4px; }
+    @page { margin:14mm; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="ball">⚽</span> Team Rotation</h1>
+  <p class="sub">Equal playing time &middot; fair substitutions &middot; works offline</p>
+
+  <!-- ===================== SETUP ===================== -->
+  <section id="setup">
+    <div class="card">
+      <h2>1 &middot; Players</h2>
+      <label>One name per line (the whole squad, including bench)</label>
+      <textarea id="players" placeholder="One name per line">Adva
+Shayna
+Elowynn
+Mackenzie
+Abby
+Grace
+Freya
+Jordana
+Noa
+Ada
+Charlie
+Ella
+Bella</textarea>
+      <div class="hint" id="playercount">0 players</div>
+    </div>
+
+    <div class="card">
+      <h2>2 &middot; Formation (on the field)</h2>
+      <div class="preset" id="presets"></div>
+      <div id="formrows"></div>
+      <div class="tacticsum" id="tacticsum"></div>
+      <div class="hint">Total on field includes 1 goalkeeper. Pick your goalkeeper(s) below before starting; you can change the keeper during the game too.</div>
+    </div>
+
+    <div class="card">
+      <h2>3 &middot; Game</h2>
+      <div class="row">
+        <div>
+          <label>Game length (minutes)</label>
+          <input id="gamelen" type="number" inputmode="numeric" min="1" value="50">
+        </div>
+        <div>
+          <label>Rotate every (minutes)</label>
+          <input id="interval" type="number" inputmode="numeric" min="1" value="5">
+        </div>
+      </div>
+      <div class="hint" id="roundhint"></div>
+    </div>
+
+    <div class="card">
+      <h2>4 &middot; Goalkeeper <span class="pill pos-GK">required</span></h2>
+      <label>1st half goalkeeper</label>
+      <div class="gkpick" id="setupGk1"></div>
+      <label style="margin-top:12px;">2nd half goalkeeper <span style="font-weight:400;">(optional — defaults to the 1st-half keeper)</span></label>
+      <div class="gkpick" id="setupGk2"></div>
+      <div class="hint">The keeper plays goal the whole half and is kept out of the outfield rotation. You can still change the keeper during the game.</div>
+    </div>
+
+    <div id="setupwarn"></div>
+    <button class="primary" id="startBtn">Build rotation &amp; start game</button>
+    <div class="hint" style="text-align:center;margin-top:10px;">Tip: open in Chrome, then "Add to Home Screen" to use it like an installed app.</div>
+  </section>
+
+  <!-- ===================== GAME ===================== -->
+  <section id="game" class="hidden">
+    <div class="card">
+      <div class="foldhdr" onclick="toggleGkPanel()">
+        <h2 style="margin:0;">Goalkeeper &middot; <span class="half-badge" id="halfbadge">1st half</span></h2>
+        <span class="chev" id="gkchev">▾</span>
+      </div>
+      <div id="gkbody">
+        <div class="hint">Pick who keeps goal this half. They stay in goal the whole half; outfield time is balanced across everyone else.</div>
+        <div class="gkpick" id="gkpick"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="foldhdr" onclick="toggleAvail()">
+        <h2 style="margin:0;">Squad availability</h2>
+        <span class="chev" id="availchev">▾</span>
+      </div>
+      <div id="availbody">
+        <div class="hint">Tap a player to mark them 🚑 injured (pulled out of rotation) or back in. The remaining schedule rebuilds instantly around who's available.</div>
+        <div class="gkpick" id="availpick"></div>
+        <div class="hint" id="availmeta" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="clock" id="clock">00:00</div>
+      <div class="clockmeta" id="clockmeta"></div>
+      <div class="progress"><span id="progbar" style="width:0%"></span></div>
+      <div class="nextbar" id="nextbar"></div>
+      <div class="btnrow">
+        <button class="primary" id="startstop">Start</button>
+        <button class="ghost" id="resetclock">Reset clock</button>
+      </div>
+      <div class="btnrow">
+        <button class="ghost" id="prevSub">◀ Prev</button>
+        <button class="warn" id="doSub">Do substitution now</button>
+        <button class="ghost" id="nextSub">Next ▶</button>
+      </div>
+    </div>
+
+    <div class="sidebyside">
+      <div class="card">
+        <h2>On the field now</h2>
+        <div class="fieldwrap" id="field">
+          <div class="mid"></div><div class="circle"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Next substitution <span id="nextsubwhen" class="half-badge"></span></h2>
+        <div class="subpanel" id="subpanel"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="foldhdr" onclick="toggleRoster()">
+        <h2 style="margin:0;">Time played</h2>
+        <span class="chev" id="rosterchev">▾</span>
+      </div>
+      <div id="rosterbody">
+        <div class="hint" style="margin-bottom:8px;">Shift = current unbroken time on the pitch right now. Total = total time played (outfield + goal). Time in goal does not count toward the fairness rotation, so a one-half keeper ends with about half the total of a never-keeper.</div>
+        <table id="rostertable"><thead><tr><th>Player</th><th>Status</th><th class="time">Shift</th><th class="time">Total</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="foldhdr" onclick="togglePlan()">
+        <h2 style="margin:0;">Game plan &middot; positions over time</h2>
+        <span class="chev" id="planchev">▾</span>
+      </div>
+      <div id="planbody">
+        <div class="hint" style="margin-bottom:8px;">Every player's position in each segment across the whole game (GK, line + side, or blank = on the bench). The current segment is highlighted. Scroll sideways to see the full game.</div>
+        <div id="plangrid" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <button class="ghost" id="backBtn">◀ Back to setup (edit game)</button>
+    <button class="danger" id="newGame" style="margin-top:10px;">End &amp; start a new game</button>
+  </section>
+
+  <!-- manual substitution picker -->
+  <div id="subModal" class="modal hidden" onclick="if(event.target===this)closeSubPicker()">
+    <div class="modalbox">
+      <div class="modalhdr">
+        <span id="subModalTitle">Substitute</span>
+        <button class="modalx" onclick="closeSubPicker()">✕</button>
+      </div>
+      <div class="hint" id="subModalHint"></div>
+      <div class="gkpick" id="subModalList"></div>
+    </div>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   Team Rotation PWA — all logic, offline, no dependencies.
+   ============================================================ */
+
+const POS = ["DEF","MID","ATK"];           // outfield lines, GK handled separately
+const LS_KEY = "teamRotation.v2";   // bump invalidates incompatible older saved games
+
+/* ---- app state ---- */
+let state = {
+  players: [],            // ["Alex", ...]
+  formation: {GK:1, DEF:2, MID:2, ATK:2},
+  gameLen: 50,
+  interval: 5,
+  // runtime
+  started: false,
+  rounds: [],             // computed schedule: array of {min, field:[{name,pos}], bench:[name], swaps:[{off,on,pos}]}
+  gkByHalf: [null,null],  // chosen GK name per half (index 0=1st,1=2nd)
+  elapsed: 0,             // seconds
+  running: false,
+  playTime: {},           // name -> seconds as an OUTFIELD player (the fairness number)
+  gkTime: {},             // name -> seconds spent in goal (tracked separately, not "played")
+  lastTick: null,
+  manualIndex: 0,         // which round the user is currently "at" via prev/next or clock
+};
+
+/* ---- presets ---- */
+const PRESETS = [
+  {name:"2-2-2 (7)", f:{DEF:2,MID:2,ATK:2}},
+  {name:"2-3-1 (7)", f:{DEF:2,MID:3,ATK:1}},
+  {name:"3-2-1 (7)", f:{DEF:3,MID:2,ATK:1}},
+  {name:"1-2-1 (5)", f:{DEF:1,MID:2,ATK:1}},
+  {name:"2-1-2 (6)", f:{DEF:2,MID:1,ATK:2}},
+  {name:"3-3-2 (9)", f:{DEF:3,MID:3,ATK:2}},
+  {name:"4-3-3 (11)",f:{DEF:4,MID:3,ATK:3}},
+];
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+// stable, deterministic tiebreak comparator (avoids random drift in fairness ranking)
+const cmpName = (a,b) => a<b ? -1 : a>b ? 1 : 0;
+const el = (tag, cls, txt) => { const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; };
+const fmt = s => { s=Math.max(0,Math.round(s)); const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0"); };
+const mins = s => Math.round(s/60);
+function toast(msg){ const t=el("div","toast",msg); document.body.appendChild(t); setTimeout(()=>t.remove(),3200); }
+function beep(){ try{
+  const ac=new (window.AudioContext||window.webkitAudioContext)();
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.connect(g); g.connect(ac.destination); o.type="sine"; o.frequency.value=880;
+  g.gain.setValueAtTime(.0001,ac.currentTime); g.gain.exponentialRampToValueAtTime(.4,ac.currentTime+.02);
+  g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+.6);
+  o.start(); o.stop(ac.currentTime+.62);
+}catch(e){} }
+function vibrate(p){ if(navigator.vibrate) try{navigator.vibrate(p);}catch(e){} }
+
+function parsePlayers(){ return $("#players").value.split("\n").map(s=>s.trim()).filter(Boolean); }
+function onFieldCount(f){ return f.GK + f.DEF + f.MID + f.ATK; }
+function outfieldSlots(f){ // ordered position list for one lineup, GK excluded
+  const list=[]; POS.forEach(p=>{ for(let i=0;i<f[p];i++) list.push(p); }); return list;
+}
+// Derive Left/Right/Center labels for each outfield player from their order within
+// their line. A 2-player line = L then R; a 3-player line = L, C, R; 1 = center.
+// Returns a map keyed by player name -> "L"|"R"|"C"|"" (""=no side, single pivot).
+function sideLabels(line){
+  const byPos={}; line.forEach(p=>{ if(p.pos==="GK")return; (byPos[p.pos]=byPos[p.pos]||[]).push(p); });
+  const out={};
+  Object.keys(byPos).forEach(pos=>{
+    const arr=byPos[pos], n=arr.length;
+    arr.forEach((p,i)=>{
+      let s="";
+      if(n===2) s=(i===0)?"L":"R";
+      else if(n===3) s=(i===0)?"L":(i===1)?"C":"R";
+      else if(n>=4){ // split evenly L/R, extra one center
+        const half=Math.floor(n/2);
+        s = i<half ? "L" : (i>=n-half ? "R" : "C");
+      }
+      out[p.name]=s;
+    });
+  });
+  return out;
+}
+// Full display label like "DEF-L" / "MID-R" / "ATK"
+function posLabel(pos, side){ return side ? pos+"-"+side : pos; }
+
+/* ================= setup UI ================= */
+function renderPresets(){
+  const box=$("#presets"); box.innerHTML="";
+  PRESETS.forEach(p=>{
+    const b=el("button",null,p.name);
+    b.onclick=()=>{ state.formation={GK:1,...p.f}; renderFormation(); syncTactic(); };
+    box.appendChild(b);
+  });
+}
+function renderFormation(){
+  const box=$("#formrows"); box.innerHTML="";
+  const rows=[["GK","Goalkeeper",false],["DEF","Defenders",true],["MID","Midfielders",true],["ATK","Attackers",true]];
+  rows.forEach(([key,label,editable])=>{
+    const row=el("div","formrow");
+    const lbl=el("div","lbl");
+    lbl.appendChild(el("span","pill pos-"+key,key));
+    lbl.appendChild(el("span",null,label));
+    row.appendChild(lbl);
+    const c=el("div","counter");
+    const minus=el("button",null,"−"); const val=el("span","val",String(state.formation[key])); const plus=el("button",null,"+");
+    if(!editable){ minus.disabled=true; plus.disabled=true; }
+    minus.onclick=()=>{ if(state.formation[key]>0){state.formation[key]--; val.textContent=state.formation[key]; syncTactic();} };
+    plus.onclick=()=>{ state.formation[key]++; val.textContent=state.formation[key]; syncTactic(); };
+    c.appendChild(minus); c.appendChild(val); c.appendChild(plus);
+    row.appendChild(c);
+    box.appendChild(row);
+  });
+}
+function syncTactic(){
+  const f=state.formation, n=onFieldCount(f);
+  const outfield=n-f.GK;
+  const maxSub=Math.floor(n/2);
+  $("#tacticsum").innerHTML=
+    `<b>${n}</b> on field = 1 GK + ${f.DEF} DEF + ${f.MID} MID + ${f.ATK} ATK &middot; `+
+    `max <b>${maxSub}</b> subbed per rotation (half of on-field)`;
+  updateRoundHint();
+  validateSetup();
+}
+function updateRoundHint(){
+  const len=+$("#gamelen").value||0, iv=+$("#interval").value||0;
+  if(len>0 && iv>0){
+    const rounds=Math.max(1,Math.round(len/iv));
+    $("#roundhint").textContent=`${rounds} segment(s) of ~${(len/rounds).toFixed(1)} min each.`;
+  } else $("#roundhint").textContent="";
+}
+// Render the goalkeeper picker on the SETUP screen (half 0 required, half 1 optional).
+function renderSetupGk(){
+  const players=parsePlayers();
+  [["setupGk1",0],["setupGk2",1]].forEach(([id,half])=>{
+    const box=$("#"+id); if(!box) return; box.innerHTML="";
+    // drop any previously-picked GK that is no longer in the roster
+    if(state.gkByHalf[half] && !players.includes(state.gkByHalf[half])) state.gkByHalf[half]=null;
+    players.forEach(name=>{
+      const b=el("button",null,name);
+      if(state.gkByHalf[half]===name) b.classList.add("sel");
+      b.onclick=()=>{ state.gkByHalf[half]=(state.gkByHalf[half]===name?null:name); renderSetupGk(); validateSetup(); };
+      box.appendChild(b);
+    });
+    if(players.length===0) box.appendChild(el("div","hint","Add players above first."));
+  });
+}
+function validateSetup(){
+  const warn=$("#setupwarn"); warn.innerHTML="";
+  const players=parsePlayers();
+  const n=onFieldCount(state.formation);
+  const len=+$("#gamelen").value||0, iv=+$("#interval").value||0;
+  let msgs=[];
+  if(players.length < n) msgs.push(`You have ${players.length} players but need ${n} on the field.`);
+  if(n < 2) msgs.push("Need at least 2 on the field.");
+  if(len<=0) msgs.push("Game length must be greater than 0.");
+  if(iv<=0) msgs.push("Rotation interval must be greater than 0.");
+  if(iv>len) msgs.push("Rotation interval is longer than the game.");
+  if(!state.gkByHalf[0]) msgs.push("Pick a 1st-half goalkeeper (section 4) before starting.");
+  const ok = msgs.length===0;
+  if(!ok){ warn.innerHTML=`<div class="warnbox">⚠ ${msgs.join("<br>")}</div>`; }
+  else if(players.length===n){
+    warn.innerHTML=`<div class="okbox">All ${n} players will be on the field the whole game (no bench to rotate). That's fine — you can still assign/track positions.</div>`;
+  }
+  $("#startBtn").disabled=!ok;
+  return ok;
+}
+
+/* ================= rotation engine ================= */
+/*
+  Fairness model:
+  - GK slot is kept out of the outfield fairness pool. Whoever is picked as GK for a
+    half simply occupies the GK slot; the remaining players share outfield time equally.
+  - We rotate OUTFIELD players across segments. At each boundary we bench the players
+    with the most accumulated outfield segments and bring on those with the least,
+    capped at floor(onField/2) swaps so you never change more than half at once.
+  - Each incoming player is assigned to the position left open by an outgoing player,
+    keeping the formation shape intact. Within a segment, positions are shuffled a bit
+    so players experience different lines across the game.
+*/
+function availablePlayers(){
+  const inj = state.injured || [];
+  return state.players.filter(p => !inj.includes(p));
+}
+
+function buildRounds(opts){
+  opts = opts || {};
+  const f=state.formation;
+  const players=(opts.players || availablePlayers()).slice();
+  const onField=onFieldCount(f);
+  const outfieldN=onField-f.GK;              // outfield slots to fill from pool
+  const len=state.gameLen, iv=state.interval;
+  const segCount=Math.max(1,Math.round(len/iv));
+  const segMin=len/segCount;
+  const maxSub=Math.floor(onField/2);
+
+  // Fairness pool = available players. GK for a half is picked on the game screen;
+  // the engine schedules OUTFIELD play and the chosen GK occupies the GK slot.
+  // opts.outSegments / opts.posCount seed prior play so a mid-game rebuild stays fair.
+  const outSegments={};   // name -> count of outfield segments assigned (fair time)
+  const posCount={};      // name -> {DEF,MID,ATK} tally, used to spread players across lines
+  const lastOnSeg={};     // name -> last segment index the player was ON (-1 = not yet)
+  const onStreak={};      // name -> consecutive segments currently ON
+  players.forEach(p=>{
+    outSegments[p]=(opts.outSegments && opts.outSegments[p]) || 0;
+    posCount[p]=(opts.posCount && opts.posCount[p]) ? {...opts.posCount[p]} : {DEF:0,MID:0,ATK:0};
+    lastOnSeg[p]=(opts.lastOnSeg && opts.lastOnSeg[p]!==undefined) ? opts.lastOnSeg[p] : -1;
+    onStreak[p]=(opts.onStreak && opts.onStreak[p]) || 0;
+  });
+  const startSeg = opts.startSeg || 0;      // rebuild from this segment forward
+  const seedField = opts.seedField || null; // lineup carried in from before the rebuild
+  // per-half goalkeepers: excluded from the OUTFIELD pool for the half they keep goal,
+  // so their outfield (field) time naturally comes out to ~half of a never-GK player.
+  const gkByHalf = opts.gkByHalf || [null,null];
+  // players who must NOT be brought on in the FIRST rebuilt segment (just subbed off, so
+  // they get at least one segment of rest instead of being rotated straight back on).
+  const restFirstSeg = new Set(opts.restFirstSeg || []);
+
+  const posTemplate=outfieldSlots(f);        // e.g. [DEF,DEF,MID,MID,ATK,ATK]
+  const rounds=[];
+  const normalized=new Set();  // GKs whose field tally was normalized on entering outfield
+  let prevField=seedField ? seedField.map(x=>({...x})) : null;
+
+  // No-sub-near-halftime: suppress any rotation whose boundary falls within
+  // `quietWindow` minutes of the midpoint. Window = half a rotation interval.
+  const midMin = len/2;
+  const quietWindow = iv/2;
+
+  // No-sub-near-halftime: NO rotation may land inside the quiet window around the
+  // midpoint. Any boundary that would fall in the window is removed, and the single
+  // boundary nearest the midpoint is shifted exactly to the halftime mark. The result:
+  // one clean rotation AT the break, with the surrounding segment stretched to absorb
+  // the removed boundaries (so a player may play a little longer across halftime).
+  const inWindow=[];
+  for(let s=Math.max(1,startSeg); s<segCount; s++){
+    const nat=s*segMin;
+    if(Math.abs(nat-midMin) < quietWindow-1e-9) inWindow.push(s);
+  }
+  // the one closest to the midpoint becomes the halftime rotation; the rest are dropped
+  let snapSeg=-1, snapBest=Infinity;
+  inWindow.forEach(s=>{ const d=Math.abs(s*segMin-midMin); if(d<snapBest){snapBest=d;snapSeg=s;} });
+  const dropSegs=new Set(inWindow.filter(s=>s!==snapSeg));
+
+  for(let s=startSeg;s<segCount;s++){
+    if(dropSegs.has(s)) continue;   // skip in-window boundaries except the halftime one
+    const halfIdx = (s < segCount/2) ? 0 : 1;
+    let atMin = +(s*segMin).toFixed(2);
+    if(s===snapSeg) atMin = +midMin.toFixed(2);
+
+    // eligible OUTFIELD pool for this segment = available players minus this half's GK
+    const halfGk = gkByHalf[halfIdx];
+    const pool = players.filter(p=>p!==halfGk);
+
+    // A player who kept goal the OTHER half joins the outfield pool now with 0 accrued
+    // field segments. Do NOT let the fairness engine flood them with catch-up minutes —
+    // that would push their field time well above half a never-GK's. Normalize their
+    // field tally ONCE, to the current pool average, so from here they get a normal
+    // share of this half's outfield time (landing at ~half overall).
+    const otherGk = gkByHalf[halfIdx===0?1:0];
+    if(otherGk && pool.includes(otherGk) && !normalized.has(otherGk)){
+      const others=pool.filter(p=>p!==otherGk);
+      if(others.length){
+        const avg=others.reduce((s,p)=>s+(outSegments[p]||0),0)/others.length;
+        outSegments[otherGk]=Math.round(avg);
+        lastOnSeg[otherGk]=s-1;   // treat as recently rotated, not "never on"
+      }
+      normalized.add(otherGk);
+    }
+
+    let field, swaps=[];
+    if(prevField===null){
+      // fresh initial lineup: fewest-played players (from the eligible pool), positions spread
+      const chosen = pickLeastPlayed(pool, outSegments, outfieldN, []);
+      field = assignPositionsSpread(chosen, posTemplate, posCount);
+    } else {
+      // normal rotation OR a mid-game rebuild seeded from the current lineup.
+      // Drop anyone on the seeded field who is injured OR is this half's GK:
+      let seed = prevField.filter(x=>pool.includes(x.name));
+      // Determine which position slots are unfilled vs the full formation template.
+      // Count positions present in the seed, subtract from the template to get holes.
+      const need={DEF:f.DEF, MID:f.MID, ATK:f.ATK};
+      seed.forEach(x=>{ if(need[x.pos]!==undefined) need[x.pos]--; });
+      const holes=[]; Object.keys(need).forEach(pos=>{ for(let i=0;i<need[pos];i++) holes.push(pos); });
+      const bench = pool.filter(p=>!seed.some(x=>x.name===p));
+      // WHO COMES OFF: most total time first, then longest on-streak, random tiebreak.
+      const fieldRanked=[...seed].sort((a,b)=>
+        outSegments[b.name]-outSegments[a.name] || onStreak[b.name]-onStreak[a.name] || Math.random()-.5);
+      // WHO COMES ON: least total time first, then off the field longest, random tiebreak.
+      // Players flagged to rest this first segment are pushed to the very end, so they only
+      // come on if no one else is available (prevents a just-subbed-off player bouncing
+      // straight back on at the next rotation).
+      const restNow = (s===startSeg) ? restFirstSeg : new Set();
+      const benchRanked=[...bench].sort((a,b)=>
+        (restNow.has(a)?1:0)-(restNow.has(b)?1:0) ||
+        outSegments[a]-outSegments[b] || lastOnSeg[a]-lastOnSeg[b] || Math.random()-.5);
+      // backfill forced by injuries doesn't count toward the "half the team" cap.
+      // At the first rebuilt segment, don't force a resting (just-subbed-off) player back
+      // on: cap voluntary swaps to the number of NON-resting bench players available.
+      const freeBench = benchRanked.filter(p=>!restNow.has(p)).length;
+      const nSwap = Math.min(maxSub, freeBench, fieldRanked.length);
+      field=seed.map(x=>({...x}));
+
+      // backfill any open position slots first (mandatory, uncapped)
+      const vacated=[];
+      let bi=0;
+      for(let h=0; h<holes.length && bi<benchRanked.length; h++){
+        field.push({name:benchRanked[bi], pos:holes[h]}); vacated.push(field.length-1); bi++;
+      }
+      // 1) fair-time swaps on top (capped at half the field)
+      for(let k=0;k<nSwap && bi<benchRanked.length;k++){
+        const outP=fieldRanked[k];
+        if(!field.some(x=>x.name===outP.name)) continue;
+        const inP=benchRanked[bi];
+        const idx=field.findIndex(x=>x.name===outP.name);
+        vacated.push(idx);
+        field[idx]={name:inP, pos:field[idx].pos};
+        bi++;
+      }
+
+      // 2) POSITION ALTERNATION. Reassign the changed slots so each incoming player
+      //    takes the line they've played LEAST, then rotate stayers off their prior line.
+      const seedNames = new Set(seed.map(x=>x.name));
+      const incoming = field.filter(x=>!seedNames.has(x.name)).map(x=>x.name);
+      const changedSlots = field
+        .map((x,i)=>({i, name:x.name, pos:x.pos}))
+        .filter(o=>incoming.includes(o.name));
+      // shuffle slot order so ties don't always favor the same line
+      for(let i=changedSlots.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[changedSlots[i],changedSlots[j]]=[changedSlots[j],changedSlots[i]];}
+      const assignedNames=new Set();
+      const incomingPool=[...incoming];
+      changedSlots.forEach(({i,pos})=>{
+        let best=null,bestScore=1e9;
+        incomingPool.forEach(nm=>{
+          if(assignedNames.has(nm)) return;
+          const sc=posCount[nm][pos] + Math.random()*0.1;
+          if(sc<bestScore){bestScore=sc;best=nm;}
+        });
+        if(best){ field[i]={name:best,pos}; assignedNames.add(best); }
+      });
+
+      // record swaps: who left the seed vs who is new on the field
+      const nowNames=new Set(field.map(x=>x.name));
+      const leftNames=seed.map(x=>x.name).filter(n=>!nowNames.has(n))
+        .concat(prevField.filter(x=>!players.includes(x.name)).map(x=>x.name)); // injured leavers
+      const inNames=field.filter(x=>!seedNames.has(x.name)).map(x=>x.name);
+      const maxPairs=Math.max(leftNames.length, inNames.length);
+      for(let k=0;k<maxPairs;k++){
+        const inP=inNames[k];
+        const slot=inP?field.find(x=>x.name===inP):null;
+        swaps.push({off:leftNames[k]||"(hole)", on:inP||"(none)", pos:slot?slot.pos:"MID"});
+      }
+
+      // NOTE: players who STAY on the field keep their exact position between rotations.
+      // Position variety comes only from bench players entering on their least-played line
+      // (handled above), never from moving someone already on the pitch.
+    }
+
+    // credit time + position tallies, and update spread trackers
+    const onNow=new Set(field.map(x=>x.name));
+    field.forEach(x=>{
+      outSegments[x.name]=(outSegments[x.name]||0)+1;
+      posCount[x.name][x.pos]=(posCount[x.name][x.pos]||0)+1;
+      lastOnSeg[x.name]=s;
+      onStreak[x.name]=(onStreak[x.name]||0)+1;
+    });
+    // anyone NOT on this segment has their on-streak reset
+    pool.forEach(p=>{ if(!onNow.has(p)) onStreak[p]=0; });
+    rounds.push({seg:s, atMin, segMin:+segMin.toFixed(2), halfIdx, gk:halfGk||null, field, swaps});
+    prevField=field.map(x=>({...x}));
+  }
+  return {rounds, segCount, segMin, outfieldN, onField, lastOnSeg, onStreak};
+}
+
+// Build several candidate schedules and keep the fairest one. Each build is sub-
+// millisecond, so "best of N" cheaply reduces the time-spread / long-bench-streak
+// variance that the per-rotation greedy choice can leave on larger benches. Scores
+// by (time spread, worst bench streak, worst on streak), all lower = better.
+function buildBestRounds(opts, tries){
+  opts = opts || {}; tries = tries || 40;
+  let best=null, bestScore=Infinity;
+  for(let t=0;t<tries;t++){
+    const b=buildRounds(opts);
+    const names=(opts.players||availablePlayers());
+    const seg={}; names.forEach(p=>seg[p]=0);
+    const onSeq={}; names.forEach(p=>onSeq[p]=[]);
+    b.rounds.forEach(r=>{ const on=new Set(r.field.map(x=>x.name));
+      r.field.forEach(x=>{ if(seg[x.name]!==undefined) seg[x.name]++; });
+      names.forEach(p=>onSeq[p].push(on.has(p)?1:0)); });
+    const vals=names.map(p=>seg[p]);
+    const spread=Math.max(...vals)-Math.min(...vals);
+    const run=(a,v)=>{let m=0,c=0;a.forEach(x=>{if(x===v){c++;m=Math.max(m,c);}else c=0;});return m;};
+    let wOff=0,wOn=0; names.forEach(p=>{ wOff=Math.max(wOff,run(onSeq[p],0)); wOn=Math.max(wOn,run(onSeq[p],1)); });
+    const score=spread*1000 + wOff*10 + wOn;   // fairness dominates, then spread
+    if(score<bestScore){ bestScore=score; best=b; }
+    if(spread<=1 && wOff<=1) break;            // already near-perfect, stop early
+  }
+  return best;
+}
+
+function pickLeastPlayed(players, segs, count, exclude){
+  const pool=players.filter(p=>!exclude.includes(p));
+  pool.sort((a,b)=>segs[a]-segs[b] || Math.random()-.5);
+  return pool.slice(0,count);
+}
+
+// Assign names to the position template so each name lands on the line it has played
+// least so far (spreads players across DEF/MID/ATK over the game).
+function assignPositionsSpread(names, template, posCount){
+  const slots=template.map((pos,i)=>({pos,i}));
+  // shuffle slot processing order so ties don't always favor the same line
+  for(let i=slots.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[slots[i],slots[j]]=[slots[j],slots[i]];}
+  const remaining=new Set(names);
+  const out=new Array(template.length);
+  slots.forEach(({pos,i})=>{
+    let best=null,bestScore=1e9;
+    remaining.forEach(nm=>{
+      const sc=(posCount[nm]?posCount[nm][pos]:0)+Math.random()*0.1;
+      if(sc<bestScore){bestScore=sc;best=nm;}
+    });
+    out[i]={name:best,pos}; remaining.delete(best);
+  });
+  return out;
+}
+
+// For players who stayed on across a rotation, swap their lines pairwise when both
+// would then be on a line they repeated, reducing back-to-back same-line play.
+function alternateStayers(field, prevField, posCount){
+  const prevPosOf={}; prevField.forEach(x=>prevPosOf[x.name]=x.pos);
+  const stayers=field.filter(x=>prevPosOf[x.name]!==undefined);
+  for(let a=0;a<stayers.length;a++){
+    const A=stayers[a];
+    if(prevPosOf[A.name]!==A.pos) continue; // already on a new line, fine
+    // find a stayer B on a different line such that swapping breaks A's repeat
+    for(let b=0;b<stayers.length;b++){
+      if(a===b) continue;
+      const B=stayers[b];
+      if(B.pos===A.pos) continue;
+      const aRepeatsNow = prevPosOf[A.name]===A.pos;
+      const bRepeatsNow = prevPosOf[B.name]===B.pos;
+      const aRepeatsAfter = prevPosOf[A.name]===B.pos;
+      const bRepeatsAfter = prevPosOf[B.name]===A.pos;
+      // swap only if it strictly reduces the number of repeats
+      if((aRepeatsNow+bRepeatsNow) > (aRepeatsAfter+bRepeatsAfter)){
+        const idxA=field.findIndex(x=>x.name===A.name);
+        const idxB=field.findIndex(x=>x.name===B.name);
+        const tmp=field[idxA].pos; field[idxA].pos=field[idxB].pos; field[idxB].pos=tmp;
+        A.pos=field[idxA].pos; B.pos=field[idxB].pos;
+        break;
+      }
+    }
+  }
+}
+
+/* ================= start game ================= */
+function startGame(){
+  if(!validateSetup()) return;
+  state.players=parsePlayers();
+  state.gameLen=+$("#gamelen").value;
+  state.interval=+$("#interval").value;
+  state.injured=[];
+  // keep the goalkeeper(s) chosen on the setup screen; 2nd half defaults to the 1st-half
+  // keeper if none was picked. (validateSetup guarantees gkByHalf[0] is set.)
+  if(!state.gkByHalf[1]) state.gkByHalf[1]=state.gkByHalf[0];
+  const built=buildBestRounds({gkByHalf:state.gkByHalf.slice()});
+  state.rounds=built.rounds;
+  state.built=built;
+  state.elapsed=0; state.running=false; state.lastTick=null; state.manualIndex=0;
+  state.playTime={}; state.gkTime={}; state.players.forEach(p=>{ state.playTime[p]=0; state.gkTime[p]=0; });
+  save();
+  $("#setup").classList.add("hidden");
+  $("#game").classList.remove("hidden");
+  $("#startstop").textContent="Start";
+  $("#gkbody").classList.remove("hidden"); $("#gkchev").textContent="▾";
+  renderGame();
+  window.scrollTo(0,0);
+}
+
+// Toggle a player's injured/available status mid-game and rebuild the schedule from
+// the current segment forward, preserving minutes already played and fair rotation.
+function toggleInjured(name){
+  if(!state.injured) state.injured=[];
+  const i=state.injured.indexOf(name);
+  const avail = state.players.filter(p=>!state.injured.includes(p) || p===name);
+  const onFieldNeed=onFieldCount(state.formation);
+  if(i<0){
+    // marking injured: ensure enough players remain
+    const left=availablePlayers().length-1;
+    if(left < onFieldNeed){
+      toast(`Can't — only ${left} players would remain, need ${onFieldNeed} on the field.`);
+      return;
+    }
+    state.injured.push(name);
+    // if the injured player was the current GK, clear that half's GK pick
+    const half=currentHalf();
+    if(state.gkByHalf[half]===name) state.gkByHalf[half]=null;
+  } else {
+    state.injured.splice(i,1);
+  }
+  rebuildFromNow();
+  save(); renderGame();
+  toast(i<0 ? `${name} marked injured — rotation rebuilt` : `${name} back in rotation`);
+}
+
+/* ================= manual substitution ================= */
+let _subOut=null;  // player currently selected to be swapped out
+function openSubPicker(name){
+  _subOut=name;
+  const onField=activeLineup().line;
+  const slot=onField.find(p=>p.name===name);
+  const posTxt = slot ? (slot.pos==="GK" ? "GK" : posLabel(slot.pos, sideLabels(onField)[name]||"")) : "";
+  $("#subModalTitle").textContent = `Sub out ${name}${posTxt?" ("+posTxt+")":""}`;
+  // candidates = available players NOT currently on the field
+  const onNames=new Set(onField.map(p=>p.name));
+  const bench=availablePlayers().filter(p=>!onNames.has(p));
+  const list=$("#subModalList"); list.innerHTML="";
+  const times=computeTimes();
+  if(slot && slot.pos==="GK"){
+    $("#subModalHint").textContent="This is the goalkeeper. Change the keeper from the Goalkeeper panel instead.";
+  } else {
+    $("#subModalHint").textContent = bench.length
+      ? `Pick who comes on for ${name} — they take the ${posTxt} position. Least-played first.`
+      : `No available bench players to bring on.`;
+    // sort bench by least total time so the fairest choice is first
+    bench.sort((a,b)=>((times.field[a]||0)+(times.gk[a]||0))-((times.field[b]||0)+(times.gk[b]||0)));
+    bench.forEach(p=>{
+      const mins=Math.round(((times.field[p]||0)+(times.gk[p]||0))/60);
+      const b=el("button",null,`${p} · ${mins}m`);
+      b.onclick=()=>manualSub(name,p);
+      list.appendChild(b);
+    });
+  }
+  $("#subModal").classList.remove("hidden");
+}
+function closeSubPicker(){ $("#subModal").classList.add("hidden"); _subOut=null; }
+function manualSub(outName, inName){
+  closeSubPicker();
+  if(state.elapsed<=state.rounds[0].atMin*60+1){
+    // at kickoff: no elapsed time yet — swap directly in the first segment's lineup
+    const r=state.rounds[currentRoundIndex()];
+    const slot=r.field.find(x=>x.name===outName);
+    if(slot && !r.field.some(x=>x.name===inName)) slot.name=inName;
+    save(); renderGame(); toast(`${inName} in for ${outName}`);
+    return;
+  }
+  rebuildFromNow({forceSwap:{out:outName, in:inName}});
+  save(); renderGame();
+  toast(`${inName} in for ${outName}`);
+}
+
+// Rebuild the remaining schedule from the segment we're currently in, carrying forward
+// Rebuild the schedule after an availability change. The CURRENT segment is frozen
+// (already being played): an injured player on it is replaced live by a bench player,
+// but a player returning from injury is NOT dropped onto it — they go to the bench and
+// become eligible for the NEXT rotation like any other substitute. Fresh rotations are
+// recomputed from the next segment forward.
+function rebuildFromNow(opts){
+  opts = opts || {};
+  const forceSwap = opts.forceSwap || null;  // {out, in} manual substitution to apply now
+  const ci=currentRoundIndex();
+  const avail=availablePlayers();
+  const curRound=state.rounds[ci];
+  const injNowOnField = curRound.field.filter(x=>!avail.includes(x.name)); // injured players currently playing
+
+  const _ct=computeTimes();
+  const curTimeOf=p=>(_ct.field[p]||0)+(_ct.gk[p]||0);
+
+  // Segment length and the NEXT ORIGINAL rotation boundary (as a segment NUMBER, not an
+  // array index — once we insert a split segment, array index != segment number, which is
+  // exactly the bug that let a second injury in the same segment swallow the next rotation).
+  const segCount=Math.max(1,Math.round(state.gameLen/state.interval));
+  const segMin=state.gameLen/segCount;
+  const injMin = state.elapsed/60;
+  // first scheduled boundary strictly after now; snap tiny fp error
+  let nextSegNum=Math.floor(injMin/segMin)+1;
+  while(nextSegNum*segMin <= injMin+1e-6) nextSegNum++;
+  if(nextSegNum>=segCount) nextSegNum=segCount; // past last boundary -> nothing more to build
+
+  // History = every existing round that STARTS before the next boundary, with the current
+  // segment adjusted for the change. Rebuilt from the clock so repeated splits never corrupt it.
+  const nextBoundaryMin = nextSegNum*segMin;
+  const kept = state.rounds.filter(r=>r.atMin < nextBoundaryMin - 1e-6).map(r=>({...r}));
+
+  let history, seedForNext;
+  const splitHappens = (injNowOnField.length>0 || forceSwap) && injMin > curRound.atMin + 1e-6;
+
+  if(splitHappens){
+    // keep everything up to & including the current segment unchanged, then a split segment
+    const curNames=new Set([state.gkByHalf[curRound.halfIdx], ...curRound.field.map(x=>x.name)].filter(Boolean));
+    const newField=curRound.field.map(slot=>{
+      // manual swap: replace the named outgoing player's slot with the chosen incoming one
+      if(forceSwap && slot.name===forceSwap.out && forceSwap.in && avail.includes(forceSwap.in)){
+        curNames.add(forceSwap.in);
+        return {name:forceSwap.in, pos:slot.pos};
+      }
+      if(avail.includes(slot.name)) return {...slot};
+      // injured in this slot -> least-played available bench player, SAME position (+side via index)
+      const cand=avail.filter(p=>!curNames.has(p)).sort((a,b)=>curTimeOf(a)-curTimeOf(b));
+      const repl=cand[0];
+      if(repl){ curNames.add(repl); return {name:repl, pos:slot.pos}; }
+      return {...slot};
+    });
+    const splitSeg={seg:curRound.seg+0.5, atMin:+injMin.toFixed(2), segMin:0, halfIdx:curRound.halfIdx, gk:curRound.gk, field:newField, swaps:[]};
+    history = kept.concat([splitSeg]);
+    seedForNext=newField.map(x=>({...x}));
+  } else {
+    // RETURN from injury, or injury exactly on a boundary: freeze current segment, injured
+    // removed, holes backfilled on their line.
+    const {line, gk}=activeLineup();
+    let curOutfield=line.filter(x=>x.pos!=="GK" && avail.includes(x.name)).map(x=>({name:x.name,pos:x.pos}));
+    const need={DEF:state.formation.DEF, MID:state.formation.MID, ATK:state.formation.ATK};
+    curOutfield.forEach(x=>{ if(need[x.pos]!==undefined) need[x.pos]--; });
+    const curNames=new Set([gk, ...curOutfield.map(x=>x.name)].filter(Boolean));
+    Object.keys(need).forEach(pos=>{
+      for(let h=0;h<need[pos];h++){
+        const cand=avail.filter(p=>!curNames.has(p)).sort((a,b)=>curTimeOf(a)-curTimeOf(b));
+        if(cand.length){ curOutfield.push({name:cand[0],pos}); curNames.add(cand[0]); }
+      }
+    });
+    // replace the current segment in `kept` with the frozen lineup (keep its atMin)
+    history = kept.map(r=> r===kept[kept.length-1] ? {...r, field:curOutfield.map(x=>({...x}))} : r);
+    if(!history.length) history=[{...curRound, field:curOutfield.map(x=>({...x}))}];
+    seedForNext=curOutfield.map(x=>({...x}));
+  }
+
+  // reconstruct fairness + spread tallies from ALL history
+  const outSegments={}, posCount={}, lastOnSeg={}, onStreak={};
+  avail.forEach(p=>{ outSegments[p]=0; posCount[p]={DEF:0,MID:0,ATK:0}; lastOnSeg[p]=-1; onStreak[p]=0; });
+  history.forEach((r,si)=>{
+    const onNow=new Set(r.field.map(x=>x.name));
+    r.field.forEach(x=>{
+      if(outSegments[x.name]===undefined){ outSegments[x.name]=0; posCount[x.name]={DEF:0,MID:0,ATK:0}; lastOnSeg[x.name]=-1; onStreak[x.name]=0; }
+      outSegments[x.name]++; posCount[x.name][x.pos]=(posCount[x.name][x.pos]||0)+1;
+      lastOnSeg[x.name]=si; onStreak[x.name]=(onStreak[x.name]||0)+1;
+    });
+    avail.forEach(p=>{ if(!onNow.has(p)) onStreak[p]=0; });
+  });
+
+  // A player who was JUST subbed off (manual swap) or injured off should NOT be first in
+  // line to come straight back on at the very next rotation — that would immediately undo
+  // the change. Mark them as most-recently-on (lastOnSeg = the split segment index) so the
+  // spread ranking rests them, and seed their total so they aren't flagged as owed minutes.
+  const justOff=[];
+  if(forceSwap && forceSwap.out) justOff.push(forceSwap.out);
+  injNowOnField.forEach(x=>justOff.push(x.name));
+  const splitIdx=history.length-1;
+  justOff.forEach(p=>{
+    if(lastOnSeg[p]!==undefined) lastOnSeg[p]=splitIdx;   // treat as just came off -> rest next
+    if(outSegments[p]!==undefined && avail.includes(p)){
+      // bump their counted segments to the current average so they aren't ranked lowest
+      const others=avail.filter(q=>q!==p);
+      const avg=others.length?Math.round(others.reduce((s,q)=>s+(outSegments[q]||0),0)/others.length):0;
+      if(outSegments[p]<avg) outSegments[p]=avg;
+    }
+  });
+
+  // fresh rotations from the next ORIGINAL boundary (segment NUMBER), seeded from current lineup.
+  // The just-subbed-off players are forbidden from the FIRST rebuilt segment so they rest.
+  const built=buildBestRounds({players:avail, outSegments, posCount, lastOnSeg, onStreak, startSeg:nextSegNum, seedField:seedForNext, gkByHalf:state.gkByHalf.slice(), restFirstSeg:justOff.filter(p=>avail.includes(p))});
+  state.rounds=history.concat(built.rounds);
+  state.built={...built, segCount:state.rounds.length};
+}
+
+/* ================= game UI ================= */
+let timer=null;
+function currentRoundIndex(){
+  // which segment are we in based on elapsed minutes
+  const m=mins(state.elapsed)/1; const em=state.elapsed/60;
+  let idx=0;
+  for(let i=0;i<state.rounds.length;i++){ if(em+1e-6 >= state.rounds[i].atMin) idx=i; }
+  return idx;
+}
+function nextRoundIndex(){
+  const em=state.elapsed/60;
+  for(let i=0;i<state.rounds.length;i++){ if(state.rounds[i].atMin > em+1e-6) return i; }
+  return -1;
+}
+function currentHalf(){ return (state.elapsed/60 < state.gameLen/2) ? 0 : 1; }
+
+function renderGame(){
+  renderGkPick();
+  renderAvailability();
+  renderClock();
+  renderField();
+  renderNextSub();
+  renderRoster();
+  renderPlan();
+  renderFooter();
+}
+
+function renderGkPick(){
+  const half=currentHalf();
+  $("#halfbadge").textContent = half===0 ? "1st half" : "2nd half";
+  const box=$("#gkpick"); box.innerHTML="";
+  availablePlayers().forEach(name=>{
+    const b=el("button",null,name);
+    if(state.gkByHalf[half]===name) b.classList.add("sel");
+    b.onclick=()=>{ state.gkByHalf[half]=(state.gkByHalf[half]===name?null:name); save(); renderGame(); };
+    box.appendChild(b);
+  });
+  if(!state.gkByHalf[half]){
+    box.appendChild(el("div","hint","No GK picked for this half yet. The schedule below shows outfield only until you pick one."));
+  }
+}
+
+function renderAvailability(){
+  const box=$("#availpick"); if(!box) return;
+  box.innerHTML="";
+  const inj=state.injured||[];
+  state.players.forEach(name=>{
+    const b=el("button",null, (inj.includes(name)?"🚑 ":"") + name);
+    b.className="availbtn"+(inj.includes(name)?" injured":"");
+    b.onclick=()=>toggleInjured(name);
+    box.appendChild(b);
+  });
+  const avail=availablePlayers().length, need=onFieldCount(state.formation);
+  const meta=$("#availmeta");
+  if(meta){
+    meta.textContent = `${avail} available · ${inj.length} injured · need ${need} on field`;
+    meta.style.color = (avail<need) ? "var(--danger)" : "var(--muted)";
+  }
+}
+
+function renderClock(){
+  const c=$("#clock"); c.textContent=fmt(state.elapsed);
+  const total=state.gameLen*60;
+  const pct=Math.min(100,(state.elapsed/total)*100);
+  $("#progbar").style.width=pct+"%";
+  const half=currentHalf();
+  $("#clockmeta").textContent=`${mins(state.elapsed)} / ${state.gameLen} min · ${half===0?"1st":"2nd"} half`;
+  const ni=nextRoundIndex();
+  if(ni>=0){
+    const r=state.rounds[ni];
+    const secsTo=Math.max(0,r.atMin*60-state.elapsed);
+    const nSwaps=r.swaps.length;
+    $("#nextbar").innerHTML=`Next rotation at <b>${Math.round(r.atMin)} min</b> (in ${fmt(secsTo)}) — <b>${nSwaps}</b> change(s)`;
+    c.classList.toggle("firing", secsTo<=10 && state.running);
+  } else {
+    $("#nextbar").innerHTML = state.elapsed/60>=state.gameLen ? "<b>Full time.</b> Great game." : "No more rotations scheduled.";
+    c.classList.remove("firing");
+  }
+  $("#startstop").textContent = state.running ? "Pause" : (state.elapsed>0?"Resume":"Start");
+}
+
+function activeLineup(){
+  // The engine already excludes each half's scheduled GK from r.field (the outfield),
+  // so r.field is the 6 outfielders. The GK slot is filled by the live gkByHalf pick
+  // (which the user may change mid-game). We drop the live GK and any injured player
+  // from the outfield, then backfill open position slots on their own lines.
+  const idx=currentRoundIndex();
+  const r=state.rounds[idx];
+  const half=currentHalf();
+  const gk=state.gkByHalf[half];
+  const f=state.formation;
+  const avail=availablePlayers();
+
+  // outfield = scheduled outfield minus the live GK (if the user re-picked one who was
+  // scheduled to play out) minus injured players
+  let outfield=r.field.filter(x=>x.name!==gk && avail.includes(x.name)).map(x=>({...x}));
+
+  // backfill open slots to the exact formation shape, each on its own line
+  const need={DEF:f.DEF, MID:f.MID, ATK:f.ATK};
+  outfield.forEach(x=>{ if(need[x.pos]!==undefined) need[x.pos]--; });
+  const onNames=new Set([gk, ...outfield.map(x=>x.name)].filter(Boolean));
+  const schedSeg = (state.built && state.built.outSegments) || {};
+  Object.keys(need).forEach(pos=>{
+    for(let h=0; h<need[pos]; h++){
+      const cand=avail.filter(p=>!onNames.has(p))
+        .sort((a,b)=>(schedSeg[a]||0)-(schedSeg[b]||0) || cmpName(a,b));
+      if(cand.length){ outfield.push({name:cand[0], pos}); onNames.add(cand[0]); }
+    }
+  });
+
+  const line=[];
+  if(gk && avail.includes(gk)) line.push({name:gk,pos:"GK"});
+  outfield.forEach(x=>line.push(x));
+  return {line, round:r, idx, gk, half};
+}
+
+// Cumulative FIELD and GK seconds for every player, derived from the schedule up to the
+// current elapsed time. Computing on demand (rather than accumulating per tick) means the
+// totals are correct no matter how the clock got here — live ticking OR a Next/Prev/Do-sub
+// jump. For each segment we take the portion that has elapsed and credit it to whoever is
+// on: the half's GK gets gkTime, the outfield players get fieldTime.
+function computeTimes(){
+  const field={}, gk={};
+  state.players.forEach(p=>{ field[p]=0; gk[p]=0; });
+  for(let i=0;i<state.rounds.length;i++){
+    const r=state.rounds[i];
+    const segStart=r.atMin*60;
+    const segEnd=(i+1<state.rounds.length ? state.rounds[i+1].atMin : state.gameLen)*60;
+    const played=Math.max(0, Math.min(state.elapsed, segEnd) - segStart);
+    if(played<=0) continue;
+    // GK for this segment's half (prefer the live pick, fall back to the scheduled one)
+    const gkName = state.gkByHalf[r.halfIdx] || r.gk;
+    if(gkName && field[gkName]!==undefined) gk[gkName]+=played;
+    r.field.forEach(x=>{ if(x.name!==gkName && field[x.name]!==undefined) field[x.name]+=played; });
+  }
+  return {field, gk};
+}
+
+// Current continuous time (seconds) a player has been on the pitch in their current stint
+// (field OR goal). Walks back through the schedule from the current segment while the
+// player is on, and measures from that stint's start boundary to the live clock.
+function currentShift(name){
+  const idx=currentRoundIndex();
+  const onNow = state.rounds[idx] && (
+     state.rounds[idx].field.some(x=>x.name===name) ||
+     state.gkByHalf[currentHalf()]===name );
+  if(!onNow) return 0;
+  let startSeg=idx;
+  for(let s=idx-1; s>=0; s--){
+    const r=state.rounds[s];
+    const onThen = r.field.some(x=>x.name===name) || (r.gk===name);
+    if(onThen) startSeg=s; else break;
+  }
+  const stintStartMin = state.rounds[startSeg].atMin;
+  return Math.max(0, state.elapsed - stintStartMin*60);
+}
+
+function renderField(){
+  const {line}=activeLineup();
+  const sides=sideLabels(line);
+  const fld=$("#field");
+  fld.querySelectorAll(".player").forEach(e=>e.remove());
+  // layout coordinates per position line (y from bottom=own goal to top=attack)
+  const byPos={GK:[],DEF:[],MID:[],ATK:[]};
+  line.forEach(p=>byPos[p.pos].push(p));
+  const yFor={GK:0.90, DEF:0.70, MID:0.47, ATK:0.22};
+  Object.keys(byPos).forEach(pos=>{
+    const arr=byPos[pos]; const n=arr.length;
+    arr.forEach((p,i)=>{
+      const x=(n===1)?0.5:(0.14 + (0.72*i/(n-1)));
+      const y=yFor[pos];
+      const node=el("div","player");
+      node.style.left=(x*100)+"%"; node.style.top=(y*100)+"%";
+      node.style.cursor="pointer";
+      node.title="Tap to substitute "+p.name;
+      node.onclick=()=>openSubPicker(p.name);
+      const dot=el("div","dot "+pos, p.name.slice(0,2).toUpperCase());
+      node.appendChild(dot);
+      node.appendChild(el("div","nm",p.name));
+      const side = p.pos==="GK" ? "" : sides[p.name];
+      node.appendChild(el("div","sidelbl", posLabel(p.pos, side)));
+      fld.appendChild(node);
+    });
+  });
+}
+
+function renderNextSub(){
+  const ni=nextRoundIndex();
+  const panel=$("#subpanel");
+  panel.innerHTML="";
+  if(ni<0){ panel.appendChild(el("div","hint","No further substitutions — current lineup plays to the final whistle.")); $("#nextsubwhen").textContent=""; return; }
+  const r=state.rounds[ni];
+  $("#nextsubwhen").textContent=`at ${Math.round(r.atMin)} min`;
+  if(r.swaps.length===0){ panel.appendChild(el("div","hint","No changes at this rotation (lineup stays).")); return; }
+  const sides=sideLabels(r.field);  // sides in the lineup AFTER this rotation
+  r.swaps.forEach(sw=>{
+    const row=el("div","swap");
+    row.appendChild(Object.assign(el("span","off","⬇ "+sw.off),{}));
+    row.appendChild(el("span","arr","→"));
+    row.appendChild(el("span","on","⬆ "+sw.on));
+    const side = sides[sw.on] || "";
+    row.appendChild(Object.assign(el("span","pill pos-"+sw.pos+" ppos", posLabel(sw.pos, side)),{}));
+    panel.appendChild(row);
+  });
+}
+
+function renderRoster(){
+  const tb=$("#rostertable").querySelector("tbody"); tb.innerHTML="";
+  const {line}=activeLineup();
+  const sides=sideLabels(line);
+  const onNames=line.map(p=>p.name);
+  const inj=state.injured||[];
+  const times=computeTimes();
+  const rows=state.players.map(name=>{
+    const injured=inj.includes(name);
+    const posObj=line.find(p=>p.name===name);
+    const isGk=posObj&&posObj.pos==="GK";
+    const on=onNames.includes(name) && !injured && !isGk;
+    const pos=injured?"INJ":(posObj?posObj.pos:"BENCH");
+    const side=posObj?(sides[name]||""):"";
+    const field=times.field[name]||0;
+    const gk=times.gk[name]||0;
+    const shift=currentShift(name);
+    return {name,on,isGk,pos,side,injured,shift,total:field+gk};
+  });
+  // sort by total time, least first so you can see who is owed minutes
+  rows.sort((a,b)=> (a.injured-b.injured) || a.total-b.total);
+  rows.forEach(r=>{
+    const tr=el("tr");
+    tr.appendChild(el("td",null,(r.injured?"🚑 ":"")+r.name));
+    const st=el("td");
+    const label=r.injured?"INJURED":(r.isGk?"GK":(r.on?posLabel(r.pos,r.side):"BENCH"));
+    const cls=r.injured?"pos-BENCH":("pos-"+(r.isGk?"GK":r.pos));
+    const pill=el("span","pill "+cls,label);
+    if(r.injured) pill.style.cssText="background:#4a1d1d;color:#ffd8d8;border:1px solid var(--danger);";
+    st.appendChild(pill); tr.appendChild(st);
+    const shiftCell=el("td","time", r.shift>0?fmt(r.shift):"–");
+    if(r.shift>0) shiftCell.style.color="var(--accent)";
+    tr.appendChild(shiftCell);
+    tr.appendChild(Object.assign(el("td","time",fmt(r.total)),{}));
+    tb.appendChild(tr);
+  });
+}
+function renderFooter(){
+  const b=state.built||{};
+  const maxSub=Math.floor(onFieldCount(state.formation)/2);
+  $("#footer").textContent=`${b.segCount||state.rounds.length} segments · max ${maxSub} subs/rotation · fair time · positions rotate`;
+}
+
+// Full game plan grid: rows = players, columns = segments, cell = that player's position
+// in that segment (GK / line+side / blank for bench). Includes substitutions implicitly —
+// a player's row shows exactly which segments they're on and where.
+function renderPlan(){
+  const host=$("#plangrid"); if(!host) return; host.innerHTML="";
+  if(!state.rounds || !state.rounds.length) return;
+  const curIdx=currentRoundIndex();
+  const inj=state.injured||[];
+  // precompute each segment's sides + GK
+  const segInfo=state.rounds.map(r=>{
+    const gkName=state.gkByHalf[r.halfIdx]||r.gk;
+    // build the on-pitch lineup for this segment: GK + outfield (excluding GK, excluding injured)
+    const outfield=r.field.filter(x=>x.name!==gkName);
+    const sides=sideLabels(outfield);
+    const posOf={};
+    if(gkName) posOf[gkName]="GK";
+    outfield.forEach(x=>{ posOf[x.name]=posLabel(x.pos, sides[x.name]||""); });
+    const lineOf={}; // pos family for cell colour
+    if(gkName) lineOf[gkName]="GK";
+    outfield.forEach(x=>{ lineOf[x.name]=x.pos; });
+    return {gkName, posOf, lineOf};
+  });
+  const tbl=el("table","plan");
+  // header row: Player + each segment's start minute
+  const thead=el("thead"); const htr=el("tr");
+  htr.appendChild(Object.assign(el("th",null,"Player"),{className:"pname"}));
+  state.rounds.forEach((r,i)=>{
+    const th=el("th",(i===curIdx?"cur":null), Math.round(r.atMin)+"'");
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr); tbl.appendChild(thead);
+  const tbody=el("tbody");
+  state.players.forEach(name=>{
+    const tr=el("tr");
+    const pn=el("td","pname",(inj.includes(name)?"🚑 ":"")+name); tr.appendChild(pn);
+    segInfo.forEach((si,i)=>{
+      const injuredThisSeg = inj.includes(name); // injuries aren't time-stamped per seg; mark current status
+      const pos=si.posOf[name];
+      let cls="", txt="";
+      if(pos){ cls="cell-"+si.lineOf[name]; txt=pos; }
+      else { cls="bench"; txt="·"; }
+      if(i===curIdx) cls+=" cur";
+      const td=el("td",cls,txt);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  host.appendChild(tbl);
+}
+/* ================= clock loop ================= */
+let lastRoundSeen=-1;
+function tick(){
+  if(!state.running) return;
+  const now=Date.now();
+  const dt=(now-state.lastTick)/1000;
+  state.lastTick=now;
+  state.elapsed+=dt;
+
+  // Note: per-player Field/GK/Total time is derived on demand from the schedule in
+  // computeTimes(), not accumulated here — that keeps totals correct whether the clock
+  // advances by ticking or by a Next/Prev/Do-sub jump.
+
+  // rotation alert when we cross a boundary
+  const ci=currentRoundIndex();
+  if(ci!==lastRoundSeen && ci>0){
+    lastRoundSeen=ci;
+    const r=state.rounds[ci];
+    if(r.swaps.length){
+      beep(); vibrate([200,100,200]);
+      $("#subpanel").classList.add("flash"); setTimeout(()=>$("#subpanel").classList.remove("flash"),3200);
+      toast(`⏱ Rotation at ${Math.round(r.atMin)} min — make ${r.swaps.length} change(s)`);
+    }
+  }
+  // stop at full time
+  if(state.elapsed/60>=state.gameLen){ state.elapsed=state.gameLen*60; pauseClock(); toast("🏁 Full time"); }
+
+  renderClock(); renderField(); renderNextSub(); renderRoster();
+  save();
+}
+function startClock(){
+  if(state.running) return;
+  if(state.elapsed/60>=state.gameLen){ return; }
+  state.running=true; state.lastTick=Date.now();
+  lastRoundSeen=currentRoundIndex();
+  timer=setInterval(tick,250);
+  renderClock();
+}
+function pauseClock(){ state.running=false; if(timer){clearInterval(timer); timer=null;} renderClock(); save(); }
+
+/* ================= persistence ================= */
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
+function load(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return false;
+    const s=JSON.parse(raw);
+    if(s && s.players){ state={...state,...s}; return true; }
+  }catch(e){}
+  return false;
+}
+
+/* ================= wiring ================= */
+function toggleGkPanel(){ const b=$("#gkbody"); b.classList.toggle("hidden"); $("#gkchev").textContent=b.classList.contains("hidden")?"▸":"▾"; }
+function toggleAvail(){ const b=$("#availbody"); b.classList.toggle("hidden"); $("#availchev").textContent=b.classList.contains("hidden")?"▸":"▾"; }
+function toggleRoster(){ const b=$("#rosterbody"); b.classList.toggle("hidden"); $("#rosterchev").textContent=b.classList.contains("hidden")?"▸":"▾"; }
+function togglePlan(){ const b=$("#planbody"); b.classList.toggle("hidden"); $("#planchev").textContent=b.classList.contains("hidden")?"▸":"▾"; }
+
+function init(){
+  // Wire the critical buttons FIRST, before any rendering — so even if a render step
+  // throws, Start and the other controls are always clickable.
+  $("#startBtn").onclick=startGame;
+  $("#startstop").onclick=()=>{ state.running?pauseClock():startClock(); };
+  $("#players").addEventListener("input",()=>{ const n=parsePlayers().length; $("#playercount").textContent=`${n} player${n===1?"":"s"}`; renderSetupGk(); validateSetup(); });
+  $("#gamelen").addEventListener("input",()=>{updateRoundHint();validateSetup();});
+  $("#interval").addEventListener("input",()=>{updateRoundHint();validateSetup();});
+  $("#resetclock").onclick=()=>{ pauseClock(); state.elapsed=0; lastRoundSeen=-1; state.players.forEach(p=>{ state.playTime[p]=0; state.gkTime[p]=0; }); renderGame(); save(); };
+  $("#doSub").onclick=()=>{ const ni=nextRoundIndex(); if(ni<0){ toast("No more rotations."); return; } state.elapsed=state.rounds[ni].atMin*60; lastRoundSeen=ni; beep(); vibrate([200,100,200]); renderGame(); save(); toast(`Advanced to ${Math.round(state.rounds[ni].atMin)} min rotation`); };
+  $("#prevSub").onclick=()=>{ const ci=currentRoundIndex(); if(ci>0){ state.elapsed=state.rounds[ci-1].atMin*60; lastRoundSeen=ci-1; renderGame(); save(); } };
+  $("#nextSub").onclick=()=>{ const ni=nextRoundIndex(); if(ni>=0){ state.elapsed=state.rounds[ni].atMin*60; lastRoundSeen=ni; renderGame(); save(); } };
+  $("#backBtn").onclick=()=>{ pauseClock(); $("#game").classList.add("hidden"); $("#setup").classList.remove("hidden"); fillSetupFromState(); };
+  $("#newGame").onclick=()=>{ if(confirm("End this game and start fresh?")){ pauseClock(); localStorage.removeItem(LS_KEY); location.reload(); } };
+
+  // Initial setup render (guarded: a render error must not prevent the game from starting).
+  try {
+    renderPresets();
+    renderFormation();
+    syncTactic();
+    renderSetupGk();
+    const n=parsePlayers().length; $("#playercount").textContent=`${n} player${n===1?"":"s"}`;
+  } catch(e){ /* non-fatal: buttons are already wired above */ }
+
+  // restore a game in progress (guarded: a corrupt/incompatible save must never break
+  // startup — on any error we discard it and fall back to the setup screen)
+  try {
+    if(load() && state.rounds && state.rounds.length && state.players && state.players.length){
+      fillSetupFromState();
+      $("#setup").classList.add("hidden"); $("#game").classList.remove("hidden");
+      state.running=false; renderGame();
+      toast("Restored game in progress");
+    }
+  } catch(e){
+    try{ localStorage.removeItem(LS_KEY); }catch(_){}
+    $("#game").classList.add("hidden"); $("#setup").classList.remove("hidden");
+  }
+}
+function fillSetupFromState(){
+  $("#players").value=state.players.join("\n");
+  $("#gamelen").value=state.gameLen;
+  $("#interval").value=state.interval;
+  const n=parsePlayers().length; $("#playercount").textContent=`${n} player${n===1?"":"s"}`;
+  renderFormation(); syncTactic(); renderSetupGk();
+}
+
+document.addEventListener("DOMContentLoaded",init);
+</script>
+</body>
+</html>
