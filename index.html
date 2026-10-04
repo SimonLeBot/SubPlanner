@@ -74,6 +74,11 @@
   .clockmeta{text-align:center; color:var(--muted); font-size:.82rem; margin-top:4px;}
   .nextbar{text-align:center; margin:10px 0 2px; font-size:.9rem;}
   .nextbar b{color:var(--accent);}
+  .nextbar .muted{color:var(--muted); font-size:.82rem;}
+  .nextbar.due{color:var(--warn); font-weight:700; animation:duepulse 1.2s ease-in-out infinite;}
+  .nextbar.due b{color:var(--warn);}
+  @keyframes duepulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+  @media (prefers-reduced-motion: reduce){ .nextbar.due{animation:none;} }
   .progress{height:8px; background:var(--surface2); border-radius:999px; overflow:hidden; margin:10px 0;}
   .progress>span{display:block; height:100%; background:var(--accent); transition:width .4s;}
 
@@ -247,6 +252,7 @@ Bella</textarea>
       <div class="nextbar" id="nextbar"></div>
       <div class="btnrow">
         <button class="primary" id="startstop">Start</button>
+        <button class="ghost" id="halftime">⏸ Half-time</button>
         <button class="ghost" id="resetclock">Reset clock</button>
       </div>
       <div class="btnrow">
@@ -336,6 +342,11 @@ let state = {
   gkTime: {},             // name -> seconds spent in goal (tracked separately, not "played")
   lastTick: null,
   manualIndex: 0,         // which round the user is currently "at" via prev/next or clock
+  activeIndex: 0,         // the segment whose lineup is ACTUALLY on the field right now.
+                          // Substitutions are NEVER automatic: this only advances when the
+                          // user presses "Do substitution now" (or Prev/Next), or when an
+                          // injury / manual sub rebuilds the schedule. The clock crossing a
+                          // rotation boundary alerts the coach but does NOT change the field.
 };
 
 /* ---- presets ---- */
@@ -776,7 +787,7 @@ function startGame(){
   const built=buildBestRounds({gkByHalf:state.gkByHalf.slice()});
   state.rounds=built.rounds;
   state.built=built;
-  state.elapsed=0; state.running=false; state.lastTick=null; state.manualIndex=0;
+  state.elapsed=0; state.running=false; state.lastTick=null; state.manualIndex=0; state.activeIndex=0;
   state.playTime={}; state.gkTime={}; state.players.forEach(p=>{ state.playTime[p]=0; state.gkTime[p]=0; });
   save();
   $("#setup").classList.add("hidden");
@@ -803,7 +814,7 @@ function toggleInjured(name){
     }
     state.injured.push(name);
     // if the injured player was the current GK, clear that half's GK pick
-    const half=currentHalf();
+    const half=state.rounds[activeIndex()] ? state.rounds[activeIndex()].halfIdx : currentHalf();
     if(state.gkByHalf[half]===name) state.gkByHalf[half]=null;
   } else {
     state.injured.splice(i,1);
@@ -847,8 +858,8 @@ function closeSubPicker(){ $("#subModal").classList.add("hidden"); _subOut=null;
 function manualSub(outName, inName){
   closeSubPicker();
   if(state.elapsed<=state.rounds[0].atMin*60+1){
-    // at kickoff: no elapsed time yet — swap directly in the first segment's lineup
-    const r=state.rounds[currentRoundIndex()];
+    // at kickoff: no elapsed time yet — swap directly in the active segment's lineup
+    const r=state.rounds[activeIndex()];
     const slot=r.field.find(x=>x.name===outName);
     if(slot && !r.field.some(x=>x.name===inName)) slot.name=inName;
     save(); renderGame(); toast(`${inName} in for ${outName}`);
@@ -868,6 +879,7 @@ function manualSub(outName, inName){
 function rebuildFromNow(opts){
   opts = opts || {};
   const forceSwap = opts.forceSwap || null;  // {out, in} manual substitution to apply now
+  const applyLineup = opts.applyLineup || null; // explicit outfield [{name,pos}] to install NOW
   const ci=currentRoundIndex();
   const avail=availablePlayers();
   const curRound=state.rounds[ci];
@@ -893,12 +905,25 @@ function rebuildFromNow(opts){
   const kept = state.rounds.filter(r=>r.atMin < nextBoundaryMin - 1e-6).map(r=>({...r}));
 
   let history, seedForNext;
-  const splitHappens = (injNowOnField.length>0 || forceSwap) && injMin > curRound.atMin + 1e-6;
+  // A forced lineup change (manual sub or "Do substitution now") ALWAYS splits at the current
+  // moment, even exactly on a grid boundary — otherwise an on-time sub would fall through to the
+  // freeze/backfill branch and the new lineup would be ignored. Injuries only split when we're
+  // past the segment start (on a boundary the injury is handled by the normal boundary build).
+  const forcedChange = !!(forceSwap || applyLineup);
+  const splitHappens = (forcedChange && injMin >= curRound.atMin - 1e-6)
+                    || (injNowOnField.length>0 && injMin > curRound.atMin + 1e-6);
 
   if(splitHappens){
     // keep everything up to & including the current segment unchanged, then a split segment
+    const splitAtMin = Math.max(injMin, curRound.atMin);
     const curNames=new Set([state.gkByHalf[curRound.halfIdx], ...curRound.field.map(x=>x.name)].filter(Boolean));
-    const newField=curRound.field.map(slot=>{
+    let newField;
+    if(applyLineup){
+      // an explicit new outfield (e.g. the next fair rotation, applied NOW by "Do substitution
+      // now") — install it verbatim as the current segment's lineup.
+      newField = applyLineup.map(x=>({name:x.name, pos:x.pos}));
+    } else {
+      newField=curRound.field.map(slot=>{
       // manual swap: replace the named outgoing player's slot with the chosen incoming one
       if(forceSwap && slot.name===forceSwap.out && forceSwap.in && avail.includes(forceSwap.in)){
         curNames.add(forceSwap.in);
@@ -910,9 +935,17 @@ function rebuildFromNow(opts){
       const repl=cand[0];
       if(repl){ curNames.add(repl); return {name:repl, pos:slot.pos}; }
       return {...slot};
-    });
-    const splitSeg={seg:curRound.seg+0.5, atMin:+injMin.toFixed(2), segMin:0, halfIdx:curRound.halfIdx, gk:curRound.gk, field:newField, swaps:[]};
-    history = kept.concat([splitSeg]);
+      });
+    }
+    const onBoundary = injMin <= curRound.atMin + 1e-6;
+    if(onBoundary && kept.length){
+      // Exactly at a rotation boundary: REPLACE the current segment's lineup in place with the
+      // new one (no zero-length split segment). The current round is the last of `kept`.
+      history = kept.map((r,i)=> i===kept.length-1 ? {...r, field:newField, swaps:[]} : r);
+    } else {
+      const splitSeg={seg:curRound.seg+0.5, atMin:+splitAtMin.toFixed(2), segMin:0, halfIdx:curRound.halfIdx, gk:curRound.gk, field:newField, swaps:[]};
+      history = kept.concat([splitSeg]);
+    }
     seedForNext=newField.map(x=>({...x}));
   } else {
     // RETURN from injury, or injury exactly on a boundary: freeze current segment, injured
@@ -954,6 +987,11 @@ function rebuildFromNow(opts){
   const justOff=[];
   if(forceSwap && forceSwap.out) justOff.push(forceSwap.out);
   injNowOnField.forEach(x=>justOff.push(x.name));
+  if(applyLineup){
+    // players who were on the current field but are NOT in the new lineup just came off
+    const newNames=new Set(applyLineup.map(x=>x.name));
+    curRound.field.forEach(x=>{ if(!newNames.has(x.name)) justOff.push(x.name); });
+  }
   const splitIdx=history.length-1;
   justOff.forEach(p=>{
     if(lastOnSeg[p]!==undefined) lastOnSeg[p]=splitIdx;   // treat as just came off -> rest next
@@ -970,16 +1008,37 @@ function rebuildFromNow(opts){
   const built=buildBestRounds({players:avail, outSegments, posCount, lastOnSeg, onStreak, startSeg:nextSegNum, seedField:seedForNext, gkByHalf:state.gkByHalf.slice(), restFirstSeg:justOff.filter(p=>avail.includes(p))});
   state.rounds=history.concat(built.rounds);
   state.built={...built, segCount:state.rounds.length};
+  // The lineup now ON THE FIELD is the frozen/split current segment — the last of history.
+  // Point activeIndex at it so an injury or manual sub shows its result immediately WITHOUT
+  // auto-advancing to any later scheduled rotation.
+  state.activeIndex = Math.max(0, history.length-1);
 }
 
 /* ================= game UI ================= */
 let timer=null;
 function currentRoundIndex(){
-  // which segment are we in based on elapsed minutes
+  // which segment the CLOCK is in based on elapsed minutes (used for alerts/"due" state,
+  // NOT for what's on the field — the field is driven by activeIndex)
   const m=mins(state.elapsed)/1; const em=state.elapsed/60;
   let idx=0;
   for(let i=0;i<state.rounds.length;i++){ if(em+1e-6 >= state.rounds[i].atMin) idx=i; }
   return idx;
+}
+// The segment whose lineup is ACTUALLY on the field. Substitutions are manual-only, so this
+// advances only via "Do substitution now" / Prev / Next / injury / manual sub — never by the
+// clock. Clamped so a rebuild that shortened the schedule can't leave it out of range.
+function activeIndex(){
+  let i = (typeof state.activeIndex==="number") ? state.activeIndex : 0;
+  if(i<0) i=0;
+  if(i>state.rounds.length-1) i=state.rounds.length-1;
+  return i;
+}
+// Is the clock sitting at/past a later rotation than the one on the field? i.e. is a
+// substitution DUE (overdue) and waiting for the coach to action it?
+function pendingRoundIndex(){
+  const ai=activeIndex();
+  const ci=currentRoundIndex();
+  return ci>ai ? ai+1 : -1;   // the next unactioned rotation, if the clock has reached it
 }
 function nextRoundIndex(){
   const em=state.elapsed/60;
@@ -1000,7 +1059,7 @@ function renderGame(){
 }
 
 function renderGkPick(){
-  const half=currentHalf();
+  const half=state.rounds[activeIndex()] ? state.rounds[activeIndex()].halfIdx : currentHalf();
   $("#halfbadge").textContent = half===0 ? "1st half" : "2nd half";
   const box=$("#gkpick"); box.innerHTML="";
   availablePlayers().forEach(name=>{
@@ -1039,15 +1098,25 @@ function renderClock(){
   $("#progbar").style.width=pct+"%";
   const half=currentHalf();
   $("#clockmeta").textContent=`${mins(state.elapsed)} / ${state.gameLen} min · ${half===0?"1st":"2nd"} half`;
-  const ni=nextRoundIndex();
-  if(ni>=0){
+  const ai=activeIndex();
+  const ni=ai+1;  // the next rotation to be ACTIONED (manual) — relative to the field, not the clock
+  if(ni < state.rounds.length){
     const r=state.rounds[ni];
-    const secsTo=Math.max(0,r.atMin*60-state.elapsed);
+    const secsTo=r.atMin*60-state.elapsed;   // negative => overdue
     const nSwaps=r.swaps.length;
-    $("#nextbar").innerHTML=`Next rotation at <b>${Math.round(r.atMin)} min</b> (in ${fmt(secsTo)}) — <b>${nSwaps}</b> change(s)`;
-    c.classList.toggle("firing", secsTo<=10 && state.running);
+    if(secsTo>0){
+      $("#nextbar").innerHTML=`Next substitution due at <b>${Math.round(r.atMin)} min</b> (in ${fmt(secsTo)}) — <b>${nSwaps}</b> change(s). <span class="muted">Press “Do substitution now” to apply.</span>`;
+      $("#nextbar").classList.remove("due");
+      c.classList.toggle("firing", secsTo<=10 && state.running);
+    } else {
+      // the clock has reached/passed this rotation but the coach hasn't actioned it yet
+      $("#nextbar").innerHTML=`⏰ <b>Substitution due now</b> (${Math.round(r.atMin)} min, overdue ${fmt(-secsTo)}) — <b>${nSwaps}</b> change(s). <span class="muted">Press “Do substitution now”.</span>`;
+      $("#nextbar").classList.add("due");
+      c.classList.toggle("firing", state.running);
+    }
   } else {
-    $("#nextbar").innerHTML = state.elapsed/60>=state.gameLen ? "<b>Full time.</b> Great game." : "No more rotations scheduled.";
+    $("#nextbar").innerHTML = state.elapsed/60>=state.gameLen ? "<b>Full time.</b> Great game." : "No more substitutions — current lineup plays on.";
+    $("#nextbar").classList.remove("due");
     c.classList.remove("firing");
   }
   $("#startstop").textContent = state.running ? "Pause" : (state.elapsed>0?"Resume":"Start");
@@ -1058,9 +1127,9 @@ function activeLineup(){
   // so r.field is the 6 outfielders. The GK slot is filled by the live gkByHalf pick
   // (which the user may change mid-game). We drop the live GK and any injured player
   // from the outfield, then backfill open position slots on their own lines.
-  const idx=currentRoundIndex();
+  const idx=activeIndex();
   const r=state.rounds[idx];
-  const half=currentHalf();
+  const half=r.halfIdx;
   const gk=state.gkByHalf[half];
   const f=state.formation;
   const avail=availablePlayers();
@@ -1096,13 +1165,19 @@ function activeLineup(){
 function computeTimes(){
   const field={}, gk={};
   state.players.forEach(p=>{ field[p]=0; gk[p]=0; });
+  const ai=activeIndex();
   for(let i=0;i<state.rounds.length;i++){
+    // Substitutions are manual, so a segment that hasn't been actioned yet (i>ai) has NOT
+    // been played — stop. The ACTIVE segment runs from its start to the live clock, no
+    // matter how long past its scheduled end the coach lets it ride (delayed sub = that
+    // lineup keeps accruing time). Earlier segments ended when the NEXT one was actioned;
+    // since we advance strictly in order, their end is the next segment's start boundary.
+    if(i>ai) break;
     const r=state.rounds[i];
     const segStart=r.atMin*60;
-    const segEnd=(i+1<state.rounds.length ? state.rounds[i+1].atMin : state.gameLen)*60;
+    const segEnd = (i<ai) ? state.rounds[i+1].atMin*60 : state.elapsed; // active seg -> now
     const played=Math.max(0, Math.min(state.elapsed, segEnd) - segStart);
     if(played<=0) continue;
-    // GK for this segment's half (prefer the live pick, fall back to the scheduled one)
     const gkName = state.gkByHalf[r.halfIdx] || r.gk;
     if(gkName && field[gkName]!==undefined) gk[gkName]+=played;
     r.field.forEach(x=>{ if(x.name!==gkName && field[x.name]!==undefined) field[x.name]+=played; });
@@ -1114,11 +1189,11 @@ function computeTimes(){
 // (field OR goal). Walks back through the schedule from the current segment while the
 // player is on, and measures from that stint's start boundary to the live clock.
 function currentShift(name){
-  const idx=currentRoundIndex();
-  const onNow = state.rounds[idx] && (
+  const idx=activeIndex();
+  const onPitch = state.rounds[idx] && (
      state.rounds[idx].field.some(x=>x.name===name) ||
-     state.gkByHalf[currentHalf()]===name );
-  if(!onNow) return 0;
+     state.gkByHalf[state.rounds[idx].halfIdx]===name );
+  if(!onPitch) return 0;
   let startSeg=idx;
   for(let s=idx-1; s>=0; s--){
     const r=state.rounds[s];
@@ -1159,23 +1234,40 @@ function renderField(){
 }
 
 function renderNextSub(){
-  const ni=nextRoundIndex();
+  const ai=activeIndex();
+  const ni=ai+1;   // next rotation to be ACTIONED, relative to the field (not the clock)
   const panel=$("#subpanel");
   panel.innerHTML="";
-  if(ni<0){ panel.appendChild(el("div","hint","No further substitutions — current lineup plays to the final whistle.")); $("#nextsubwhen").textContent=""; return; }
+  if(ni>=state.rounds.length){ panel.appendChild(el("div","hint","No further substitutions — current lineup plays to the final whistle.")); $("#nextsubwhen").textContent=""; return; }
   const r=state.rounds[ni];
-  $("#nextsubwhen").textContent=`at ${Math.round(r.atMin)} min`;
-  if(r.swaps.length===0){ panel.appendChild(el("div","hint","No changes at this rotation (lineup stays).")); return; }
-  const sides=sideLabels(r.field);  // sides in the lineup AFTER this rotation
-  r.swaps.forEach(sw=>{
+  const overdue = currentRoundIndex()>ai;
+  $("#nextsubwhen").textContent = overdue ? "DUE NOW" : `at ${Math.round(r.atMin)} min`;
+  // Compute the swaps as the actual difference between what's ON THE FIELD now (active
+  // lineup) and the next segment's lineup — so this panel shows exactly what the
+  // "Do substitution now" button will apply, even if the field is lagging the clock.
+  const curOut = activeLineup().line.map(p=>p.name);
+  const nextGk = state.gkByHalf[r.halfIdx] || r.gk;
+  const nextOn = [nextGk, ...r.field.filter(x=>x.name!==nextGk).map(x=>x.name)].filter(Boolean);
+  const curSet=new Set(curOut), nextSet=new Set(nextOn);
+  const comingOff=curOut.filter(n=>!nextSet.has(n));
+  const comingOn=nextOn.filter(n=>!curSet.has(n));
+  if(comingOff.length===0 && comingOn.length===0){ panel.appendChild(el("div","hint","No changes at this rotation (lineup stays the same).")); return; }
+  const sides=sideLabels(r.field);
+  const posByName={}; r.field.forEach(x=>posByName[x.name]=x.pos); if(nextGk) posByName[nextGk]="GK";
+  const n=Math.max(comingOff.length, comingOn.length);
+  for(let k=0;k<n;k++){
+    const off=comingOff[k], on=comingOn[k];
     const row=el("div","swap");
-    row.appendChild(Object.assign(el("span","off","⬇ "+sw.off),{}));
+    row.appendChild(el("span","off", off?("⬇ "+off):"—"));
     row.appendChild(el("span","arr","→"));
-    row.appendChild(el("span","on","⬆ "+sw.on));
-    const side = sides[sw.on] || "";
-    row.appendChild(Object.assign(el("span","pill pos-"+sw.pos+" ppos", posLabel(sw.pos, side)),{}));
+    row.appendChild(el("span","on", on?("⬆ "+on):"—"));
+    if(on){
+      const pos=posByName[on]||"";
+      const side = pos==="GK" ? "" : (sides[on] || "");
+      row.appendChild(el("span","pill pos-"+pos+" ppos", posLabel(pos, side)));
+    }
     panel.appendChild(row);
-  });
+  }
 }
 
 function renderRoster(){
@@ -1227,7 +1319,8 @@ function renderFooter(){
 function renderPlan(){
   const host=$("#plangrid"); if(!host) return; host.innerHTML="";
   if(!state.rounds || !state.rounds.length) return;
-  const curIdx=currentRoundIndex();
+  const curIdx=activeIndex();          // segment on the field (highlighted)
+  const clockIdx=currentRoundIndex();  // where the clock has reached (marked if ahead)
   const inj=state.injured||[];
   // precompute each segment's sides + GK
   const segInfo=state.rounds.map(r=>{
@@ -1248,7 +1341,8 @@ function renderPlan(){
   const thead=el("thead"); const htr=el("tr");
   htr.appendChild(Object.assign(el("th",null,"Player"),{className:"pname"}));
   state.rounds.forEach((r,i)=>{
-    const th=el("th",(i===curIdx?"cur":null), Math.round(r.atMin)+"'");
+    const cls = (i===curIdx?"cur":null);
+    const th=el("th",cls, Math.round(r.atMin)+"'" + (i===clockIdx && clockIdx>curIdx ? " ⏰" : ""));
     htr.appendChild(th);
   });
   thead.appendChild(htr); tbl.appendChild(thead);
@@ -1284,15 +1378,18 @@ function tick(){
   // computeTimes(), not accumulated here — that keeps totals correct whether the clock
   // advances by ticking or by a Next/Prev/Do-sub jump.
 
-  // rotation alert when we cross a boundary
+  // SUBSTITUTIONS ARE NEVER AUTOMATIC. Crossing a rotation boundary only ALERTS the coach
+  // that the next substitution is due — it does not change the lineup. The field advances
+  // only when the coach presses "Do substitution now" (or on an injury / manual sub).
   const ci=currentRoundIndex();
-  if(ci!==lastRoundSeen && ci>0){
+  if(ci!==lastRoundSeen){
     lastRoundSeen=ci;
-    const r=state.rounds[ci];
-    if(r.swaps.length){
+    const pending = ci>activeIndex();           // clock has reached an un-actioned rotation
+    const r=state.rounds[activeIndex()+1];
+    if(pending && r){
       beep(); vibrate([200,100,200]);
       $("#subpanel").classList.add("flash"); setTimeout(()=>$("#subpanel").classList.remove("flash"),3200);
-      toast(`⏱ Rotation at ${Math.round(r.atMin)} min — make ${r.swaps.length} change(s)`);
+      toast(`⏰ Substitution due at ${Math.round(r.atMin)} min — press “Do substitution now”`);
     }
   }
   // stop at full time
@@ -1334,13 +1431,38 @@ function init(){
   // throws, Start and the other controls are always clickable.
   $("#startBtn").onclick=startGame;
   $("#startstop").onclick=()=>{ state.running?pauseClock():startClock(); };
+  // Half-time: stop the clock at the break. Just pauses the running clock and flags the
+  // break — it does not change the lineup or jump time. Resume with Start when play restarts.
+  $("#halftime").onclick=()=>{ pauseClock(); beep(); vibrate([300,150,300]); toast("⏸ Half-time — clock stopped. Press Resume to start the 2nd half."); };
   $("#players").addEventListener("input",()=>{ const n=parsePlayers().length; $("#playercount").textContent=`${n} player${n===1?"":"s"}`; renderSetupGk(); validateSetup(); });
   $("#gamelen").addEventListener("input",()=>{updateRoundHint();validateSetup();});
   $("#interval").addEventListener("input",()=>{updateRoundHint();validateSetup();});
-  $("#resetclock").onclick=()=>{ pauseClock(); state.elapsed=0; lastRoundSeen=-1; state.players.forEach(p=>{ state.playTime[p]=0; state.gkTime[p]=0; }); renderGame(); save(); };
-  $("#doSub").onclick=()=>{ const ni=nextRoundIndex(); if(ni<0){ toast("No more rotations."); return; } state.elapsed=state.rounds[ni].atMin*60; lastRoundSeen=ni; beep(); vibrate([200,100,200]); renderGame(); save(); toast(`Advanced to ${Math.round(state.rounds[ni].atMin)} min rotation`); };
-  $("#prevSub").onclick=()=>{ const ci=currentRoundIndex(); if(ci>0){ state.elapsed=state.rounds[ci-1].atMin*60; lastRoundSeen=ci-1; renderGame(); save(); } };
-  $("#nextSub").onclick=()=>{ const ni=nextRoundIndex(); if(ni>=0){ state.elapsed=state.rounds[ni].atMin*60; lastRoundSeen=ni; renderGame(); save(); } };
+  $("#resetclock").onclick=()=>{ pauseClock(); state.elapsed=0; state.activeIndex=0; lastRoundSeen=-1; state.players.forEach(p=>{ state.playTime[p]=0; state.gkTime[p]=0; }); renderGame(); save(); };
+  // Do substitution now: APPLY the next planned rotation to the field AT THE CURRENT MOMENT,
+  // then RE-PLAN all remaining rotations off the real elapsed time and real field-time totals
+  // so equal playing time is maintained no matter how early or late the coach actually subs.
+  // The clock is NEVER tied to the substitution — it keeps running independently.
+  $("#doSub").onclick=()=>{
+    const ai=activeIndex();
+    if(ai>=state.rounds.length-1){ toast("No more substitutions — current lineup plays on."); return; }
+    const nextOutfield = state.rounds[ai+1].field.map(x=>({name:x.name,pos:x.pos}));
+    if(state.elapsed <= state.rounds[0].atMin*60 + 1){
+      // kickoff: nothing has elapsed, just move onto the next planned segment directly
+      state.activeIndex=ai+1;
+    } else {
+      // install the next planned lineup now and re-balance the rest from the live clock
+      rebuildFromNow({applyLineup: nextOutfield});
+    }
+    lastRoundSeen=currentRoundIndex();   // clear the "due" alert for the rotation just made
+    beep(); vibrate([200,100,200]);
+    renderGame(); save();
+    toast("Substitution done — remaining rotations re-balanced for equal time");
+  };
+  // Prev / Next REVIEW the lineup on the field (move activeIndex) without moving the clock —
+  // handy to step back if you actioned a sub early, or peek ahead. Time played always
+  // reflects wherever the field is left.
+  $("#prevSub").onclick=()=>{ const ai=activeIndex(); if(ai>0){ state.activeIndex=ai-1; renderGame(); save(); } };
+  $("#nextSub").onclick=()=>{ const ai=activeIndex(); if(ai<state.rounds.length-1){ state.activeIndex=ai+1; renderGame(); save(); } };
   $("#backBtn").onclick=()=>{ pauseClock(); $("#game").classList.add("hidden"); $("#setup").classList.remove("hidden"); fillSetupFromState(); };
   $("#newGame").onclick=()=>{ if(confirm("End this game and start fresh?")){ pauseClock(); localStorage.removeItem(LS_KEY); location.reload(); } };
 
