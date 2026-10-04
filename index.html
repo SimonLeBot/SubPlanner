@@ -880,7 +880,11 @@ function rebuildFromNow(opts){
   opts = opts || {};
   const forceSwap = opts.forceSwap || null;  // {out, in} manual substitution to apply now
   const applyLineup = opts.applyLineup || null; // explicit outfield [{name,pos}] to install NOW
-  const ci=currentRoundIndex();
+  // Anchor on the segment ACTUALLY on the pitch (activeIndex), NOT the clock position. If the
+  // coach subbed late, the clock may have crossed one or more scheduled boundaries that never
+  // actually happened — the active lineup played straight through them. Those un-executed
+  // scheduled rounds are discarded here, and the active lineup is credited right up to `now`.
+  const ci=activeIndex();
   const avail=availablePlayers();
   const curRound=state.rounds[ci];
   const injNowOnField = curRound.field.filter(x=>!avail.includes(x.name)); // injured players currently playing
@@ -899,10 +903,11 @@ function rebuildFromNow(opts){
   while(nextSegNum*segMin <= injMin+1e-6) nextSegNum++;
   if(nextSegNum>=segCount) nextSegNum=segCount; // past last boundary -> nothing more to build
 
-  // History = every existing round that STARTS before the next boundary, with the current
-  // segment adjusted for the change. Rebuilt from the clock so repeated splits never corrupt it.
+  // History = the rounds actually played: everything up to and INCLUDING the active segment
+  // (index ci). Any scheduled rounds AFTER the active one (ci+1 ...) are discarded — they were
+  // never executed (the active lineup played through them) and are re-planned fresh below.
   const nextBoundaryMin = nextSegNum*segMin;
-  const kept = state.rounds.filter(r=>r.atMin < nextBoundaryMin - 1e-6).map(r=>({...r}));
+  const kept = state.rounds.slice(0, ci+1).map(r=>({...r}));
 
   let history, seedForNext;
   // A forced lineup change (manual sub or "Do substitution now") ALWAYS splits at the current
