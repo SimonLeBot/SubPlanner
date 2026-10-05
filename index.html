@@ -282,7 +282,7 @@ Bella</textarea>
         <span class="chev" id="rosterchev">▾</span>
       </div>
       <div id="rosterbody">
-        <div class="hint" style="margin-bottom:8px;">Shift = current unbroken time on the pitch right now. Total = total time played (outfield + goal). Time in goal does not count toward the fairness rotation, so a one-half keeper ends with about half the total of a never-keeper.</div>
+        <div class="hint" style="margin-bottom:8px;">Shift = current unbroken time on the pitch right now. Total = time played as an outfield player — time in goal is NOT counted. This is the fairness number the rotation balances, so a one-half keeper is still owed a full outfield share.</div>
         <table id="rostertable"><thead><tr><th>Player</th><th>Status</th><th class="time">Shift</th><th class="time">Total</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
@@ -1302,7 +1302,10 @@ function renderRoster(){
     const field=times.field[name]||0;
     const gk=times.gk[name]||0;
     const shift=currentShift(name);
-    return {name,on,isGk,pos,side,injured,shift,total:field+gk};
+    // "Total" is the FAIRNESS number: time played as an OUTFIELD player only. Time spent
+    // in goal is tracked (times.gk) but deliberately EXCLUDED here, so a one-half keeper is
+    // measured on the field time they're owed, not credited for standing in goal.
+    return {name,on,isGk,pos,side,injured,shift,total:field,gkTime:gk};
   });
   // sort by total time, least first so you can see who is owed minutes
   rows.sort((a,b)=> (a.injured-b.injured) || a.total-b.total);
