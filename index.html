@@ -901,6 +901,16 @@ function rebuildFromNow(opts){
   // first scheduled boundary strictly after now; snap tiny fp error
   let nextSegNum=Math.floor(injMin/segMin)+1;
   while(nextSegNum*segMin <= injMin+1e-6) nextSegNum++;
+  // "Do substitution now" CONSUMES a scheduled rotation. If pressed EARLY (before the
+  // clock reached that rotation's boundary), the just-installed lineup must NOT be
+  // interrupted again at that now-skipped boundary — the early press IS that rotation.
+  // So the next rebuilt boundary starts strictly AFTER the consumed segment number, and
+  // the remaining rotations re-space from there for equal time. (Injuries do NOT consume a
+  // rotation, so they leave nextSegNum alone.)
+  if(opts.consumeSegNum!=null){
+    const consumed=Math.round(opts.consumeSegNum);
+    if(nextSegNum<=consumed) nextSegNum=consumed+1;
+  }
   if(nextSegNum>=segCount) nextSegNum=segCount; // past last boundary -> nothing more to build
 
   // History = the rounds actually played: everything up to and INCLUDING the active segment
@@ -1450,13 +1460,19 @@ function init(){
   $("#doSub").onclick=()=>{
     const ai=activeIndex();
     if(ai>=state.rounds.length-1){ toast("No more substitutions — current lineup plays on."); return; }
-    const nextOutfield = state.rounds[ai+1].field.map(x=>({name:x.name,pos:x.pos}));
+    const nextRound = state.rounds[ai+1];
+    const nextOutfield = nextRound.field.map(x=>({name:x.name,pos:x.pos}));
+    // the scheduled segment NUMBER of the rotation we're applying — pressing early consumes it,
+    // so the rebuild must not re-interrupt the new lineup at that boundary.
+    const segCount=Math.max(1,Math.round(state.gameLen/state.interval));
+    const consumeSegNum=Math.round(nextRound.atMin/(state.gameLen/segCount));
     if(state.elapsed <= state.rounds[0].atMin*60 + 1){
       // kickoff: nothing has elapsed, just move onto the next planned segment directly
       state.activeIndex=ai+1;
     } else {
-      // install the next planned lineup now and re-balance the rest from the live clock
-      rebuildFromNow({applyLineup: nextOutfield});
+      // install the next planned lineup now and re-balance the rest from the live clock.
+      // consumeSegNum makes an EARLY press count as that rotation (next one re-spaces from now).
+      rebuildFromNow({applyLineup: nextOutfield, consumeSegNum});
     }
     lastRoundSeen=currentRoundIndex();   // clear the "due" alert for the rotation just made
     beep(); vibrate([200,100,200]);
