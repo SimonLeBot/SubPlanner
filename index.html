@@ -141,20 +141,6 @@
   .availbtn{width:auto; flex:0 0 auto; padding:8px 12px; min-height:40px; font-size:.85rem; background:var(--surface2); border:1px solid var(--line); color:var(--text); font-weight:600;}
   .availbtn.injured{background:#4a1d1d; border-color:var(--danger); color:#ffd8d8;}
 
-  /* ===== Printable report (Save as PDF) ===== */
-  #printReport{display:none;}
-  #printReport table{border-collapse:collapse; width:100%; margin:8px 0 18px; font-size:12px;}
-  #printReport th,#printReport td{border:1px solid #999; padding:4px 7px; text-align:left;}
-  #printReport th{background:#eee;}
-  #printReport td.num{text-align:right; font-variant-numeric:tabular-nums;}
-  #printReport .pgrid td,#printReport .pgrid th{text-align:center; font-size:10px; white-space:nowrap;}
-  #printReport .pgrid td.pn,#printReport .pgrid th.pn{text-align:left;}
-  @media print {
-    /* hide the live app; show only the report, in plain black-on-white */
-    body > .wrap { display:none !important; }
-    #printReport { display:block !important; color:#000; background:#fff; padding:0 4px; }
-    @page { margin:14mm; }
-  }
 </style>
 </head>
 <body>
@@ -293,7 +279,6 @@ Bella</textarea>
     </div>
 
     <button class="ghost" id="backBtn">◀ Back to setup (edit game)</button>
-    <button class="danger" id="newGame" style="margin-top:10px;">End &amp; start a new game</button>
   </section>
 
   <!-- manual substitution picker -->
@@ -1487,7 +1472,6 @@ function init(){
     toast("Substitution done — remaining rotations re-balanced for equal time");
   };
   $("#backBtn").onclick=()=>{ pauseClock(); $("#game").classList.add("hidden"); $("#setup").classList.remove("hidden"); fillSetupFromState(); };
-  $("#newGame").onclick=()=>{ if(confirm("End this game and start fresh?")){ pauseClock(); localStorage.removeItem(LS_KEY); location.reload(); } };
 
   // Initial setup render (guarded: a render error must not prevent the game from starting).
   try {
