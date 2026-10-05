@@ -521,6 +521,9 @@ function buildRounds(opts){
   // players who must NOT be brought on in the FIRST rebuilt segment (just subbed off, so
   // they get at least one segment of rest instead of being rotated straight back on).
   const restFirstSeg = new Set(opts.restFirstSeg || []);
+  // When true, perturb the fair-time ranking slightly so repeated builds sample different
+  // valid schedules (buildBestRounds keeps the fairest). Equal time is the priority.
+  const explore = !!opts.explore;
 
   const posTemplate=outfieldSlots(f);        // e.g. [DEF,DEF,MID,MID,ATK,ATK]
   const rounds=[];
@@ -589,8 +592,14 @@ function buildRounds(opts){
       const holes=[]; Object.keys(need).forEach(pos=>{ for(let i=0;i<need[pos];i++) holes.push(pos); });
       const bench = pool.filter(p=>!seed.some(x=>x.name===p));
       // WHO COMES OFF: most total time first, then longest on-streak, random tiebreak.
+      // `explore` adds a small random perturbation to the time ranking so that
+      // buildBestRounds' repeated tries can sample DIFFERENT valid schedules and escape a
+      // local optimum where the strict greedy leaves an uneven spread (e.g. short games
+      // where some players would otherwise get 2 shifts and others 4). The spread is still
+      // scored and the fairest build is kept, so exploration never makes fairness worse.
+      const jit = ()=> explore ? (Math.random()*2-1)*0.9 : 0;
       const fieldRanked=[...seed].sort((a,b)=>
-        outSegments[b.name]-outSegments[a.name] || onStreak[b.name]-onStreak[a.name] || Math.random()-.5);
+        (outSegments[b.name]+jit())-(outSegments[a.name]+jit()) || onStreak[b.name]-onStreak[a.name] || Math.random()-.5);
       // WHO COMES ON: least total time first, then off the field longest, random tiebreak.
       // Players flagged to rest this first segment are pushed to the very end, so they only
       // come on if no one else is available (prevents a just-subbed-off player bouncing
@@ -598,7 +607,7 @@ function buildRounds(opts){
       const restNow = (s===startSeg) ? restFirstSeg : new Set();
       const benchRanked=[...bench].sort((a,b)=>
         (restNow.has(a)?1:0)-(restNow.has(b)?1:0) ||
-        outSegments[a]-outSegments[b] || lastOnSeg[a]-lastOnSeg[b] || Math.random()-.5);
+        (outSegments[a]+jit())-(outSegments[b]+jit()) || lastOnSeg[a]-lastOnSeg[b] || Math.random()-.5);
       // backfill forced by injuries doesn't count toward the "half the team" cap.
       // At the first rebuilt segment, don't force a resting (just-subbed-off) player back
       // on: cap voluntary swaps to the number of NON-resting bench players available.
@@ -682,23 +691,31 @@ function buildRounds(opts){
 // variance that the per-rotation greedy choice can leave on larger benches. Scores
 // by (time spread, worst bench streak, worst on streak), all lower = better.
 function buildBestRounds(opts, tries){
-  opts = opts || {}; tries = tries || 40;
+  opts = opts || {}; tries = tries || 240;
+  const gkSet = new Set((opts.gkByHalf||[]).filter(Boolean));
   let best=null, bestScore=Infinity;
   for(let t=0;t<tries;t++){
-    const b=buildRounds(opts);
-    const names=(opts.players||availablePlayers());
+    // First try is the strict greedy (deterministic-ish); the rest explore so we can
+    // escape a local optimum and reach equal shift counts. Equal time is the priority.
+    const b=buildRounds({...opts, explore: t>0});
+    const all=(opts.players||availablePlayers());
+    // Fairness is measured on OUTFIELD players only — a goalkeeper has 0 field segments
+    // by design and must NOT drag the spread (that was making every schedule look unfair).
+    const names=all.filter(p=>!gkSet.has(p));
     const seg={}; names.forEach(p=>seg[p]=0);
     const onSeq={}; names.forEach(p=>onSeq[p]=[]);
     b.rounds.forEach(r=>{ const on=new Set(r.field.map(x=>x.name));
       r.field.forEach(x=>{ if(seg[x.name]!==undefined) seg[x.name]++; });
       names.forEach(p=>onSeq[p].push(on.has(p)?1:0)); });
     const vals=names.map(p=>seg[p]);
-    const spread=Math.max(...vals)-Math.min(...vals);
+    const spread = vals.length ? (Math.max(...vals)-Math.min(...vals)) : 0;
     const run=(a,v)=>{let m=0,c=0;a.forEach(x=>{if(x===v){c++;m=Math.max(m,c);}else c=0;});return m;};
     let wOff=0,wOn=0; names.forEach(p=>{ wOff=Math.max(wOff,run(onSeq[p],0)); wOn=Math.max(wOn,run(onSeq[p],1)); });
-    const score=spread*1000 + wOff*10 + wOn;   // fairness dominates, then spread
+    // Equal time DOMINATES everything else; bench/on streaks only break ties among
+    // equally-fair schedules.
+    const score=spread*1e6 + wOff*10 + wOn;
     if(score<bestScore){ bestScore=score; best=b; }
-    if(spread<=1 && wOff<=1) break;            // already near-perfect, stop early
+    if(spread<=1 && wOff<=1) break;            // equal (±1) and no long bench streak — stop
   }
   return best;
 }
