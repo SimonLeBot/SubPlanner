@@ -194,9 +194,11 @@ Bella</textarea>
 
     <div class="card">
       <h2>4 &middot; Goalkeeper <span class="pill pos-GK">required</span></h2>
-      <label>Goalkeeper</label>
+      <label>1st half goalkeeper</label>
       <div class="gkpick" id="setupGk1"></div>
-      <div class="hint">Pick one keeper to start. They're kept out of the outfield rotation while in goal. You can change the keeper any time during the game (including at half-time) from the in-game Goalkeeper picker.</div>
+      <label style="margin-top:12px;">2nd half goalkeeper <span style="font-weight:400;">(optional — defaults to the 1st-half keeper)</span></label>
+      <div class="gkpick" id="setupGk2"></div>
+      <div class="hint">The keeper plays goal for their whole half and is kept out of the outfield rotation that half. You can still change the keeper during the game.</div>
     </div>
 
     <div id="setupwarn"></div>
@@ -434,22 +436,20 @@ function updateRoundHint(){
 // Render the goalkeeper picker on the SETUP screen (half 0 required, half 1 optional).
 function renderSetupGk(){
   const players=parsePlayers();
-  const box=$("#setupGk1"); if(!box) return; box.innerHTML="";
-  // single keeper picker: the chosen keeper applies to the whole game (both halves).
-  // drop a previously-picked GK that is no longer in the roster.
-  if(state.gkByHalf[0] && !players.includes(state.gkByHalf[0])) state.gkByHalf[0]=null;
-  players.forEach(name=>{
-    const b=el("button",null,name);
-    if(state.gkByHalf[0]===name) b.classList.add("sel");
-    b.onclick=()=>{
-      const picked=(state.gkByHalf[0]===name?null:name);
-      // apply to both halves — the 2nd-half keeper can still be changed in-game.
-      state.gkByHalf[0]=picked; state.gkByHalf[1]=picked;
-      renderSetupGk(); validateSetup();
-    };
-    box.appendChild(b);
+  // Two independent pickers: 1st-half keeper (required) and 2nd-half keeper (optional —
+  // defaults to the 1st-half keeper at kickoff). Each half's keeper is kept out of that
+  // half's outfield rotation.
+  [["setupGk1",0],["setupGk2",1]].forEach(([id,half])=>{
+    const box=$("#"+id); if(!box) return; box.innerHTML="";
+    if(state.gkByHalf[half] && !players.includes(state.gkByHalf[half])) state.gkByHalf[half]=null;
+    players.forEach(name=>{
+      const b=el("button",null,name);
+      if(state.gkByHalf[half]===name) b.classList.add("sel");
+      b.onclick=()=>{ state.gkByHalf[half]=(state.gkByHalf[half]===name?null:name); renderSetupGk(); validateSetup(); };
+      box.appendChild(b);
+    });
+    if(players.length===0) box.appendChild(el("div","hint","Add players above first."));
   });
-  if(players.length===0) box.appendChild(el("div","hint","Add players above first."));
 }
 function validateSetup(){
   const warn=$("#setupwarn"); warn.innerHTML="";
@@ -462,7 +462,7 @@ function validateSetup(){
   if(len<=0) msgs.push("Game length must be greater than 0.");
   if(iv<=0) msgs.push("Rotation interval must be greater than 0.");
   if(iv>len) msgs.push("Rotation interval is longer than the game.");
-  if(!state.gkByHalf[0]) msgs.push("Pick a goalkeeper (section 4) before starting.");
+  if(!state.gkByHalf[0]) msgs.push("Pick a 1st-half goalkeeper (section 4) before starting.");
   const ok = msgs.length===0;
   if(!ok){ warn.innerHTML=`<div class="warnbox">⚠ ${msgs.join("<br>")}</div>`; }
   else if(players.length===n){
@@ -529,6 +529,7 @@ function buildRounds(opts){
   const rounds=[];
   const normalized=new Set();  // GKs whose field tally was normalized on entering outfield
   let prevField=seedField ? seedField.map(x=>({...x})) : null;
+  let didHalftimeShuffle=false; // ensure the full-position reshuffle happens once, at the break
 
   // No-sub-near-halftime: suppress any rotation whose boundary falls within
   // `quietWindow` minutes of the midpoint. Window = half a rotation interval.
@@ -670,6 +671,15 @@ function buildRounds(opts){
       // (handled above), never from moving someone already on the pitch.
     }
 
+    // HALF-TIME FULL RESHUFFLE: at the break the coach may move EVERYONE, including players
+    // staying on, so this is where we spread players across lines they've played least. At
+    // the first 2nd-half segment, re-assign ALL on-field positions from scratch (equal time
+    // is unaffected — only which line each on-field player occupies changes).
+    if(halfIdx===1 && !didHalftimeShuffle){
+      didHalftimeShuffle=true;
+      field = assignPositionsSpread(field.map(x=>x.name), posTemplate, posCount);
+    }
+
     // credit time + position tallies, and update spread trackers
     const onNow=new Set(field.map(x=>x.name));
     field.forEach(x=>{
@@ -787,7 +797,7 @@ function startGame(){
   const built=buildBestRounds({gkByHalf:state.gkByHalf.slice()});
   state.rounds=built.rounds;
   state.built=built;
-  state.elapsed=0; state.running=false; state.lastTick=null; state.manualIndex=0; state.activeIndex=0;
+  state.elapsed=0; state.running=false; state.lastTick=null; state.manualIndex=0; state.activeIndex=0; state.halftimePaused=false;
   state.playTime={}; state.gkTime={}; state.players.forEach(p=>{ state.playTime[p]=0; state.gkTime[p]=0; });
   save();
   $("#setup").classList.add("hidden");
@@ -1073,15 +1083,15 @@ function renderGame(){
   renderFooter();
 }
 
-// Change the goalkeeper for the WHOLE game WITHOUT re-planning or advancing the rotation.
-// The schedule (boundaries, activeIndex, who rotates when) is preserved exactly; we only
-// move the new keeper OUT of the outfield in every round and give their vacated outfield
-// slots to the previous keeper (who was out of the rotation while they kept goal). Passing
-// null clears the keeper (everyone returns to the outfield pool). This is deliberately NOT
-// rebuildFromNow: a keeper change must never consume a pending rotation or re-space the plan.
-function changeKeeper(newGK){
-  const oldGK=state.gkByHalf[0];
-  state.gkByHalf[0]=newGK; state.gkByHalf[1]=newGK;
+// Change the goalkeeper for ONE half WITHOUT re-planning or advancing the rotation. The
+// schedule (boundaries, activeIndex, who rotates when) is preserved exactly; we only move
+// the new keeper OUT of that half's outfield from the current segment on, giving their
+// vacated slots to the previous keeper. Passing null clears that half's keeper. Deliberately
+// NOT rebuildFromNow: a keeper change must never consume a pending rotation or re-space.
+function changeKeeper(newGK, half){
+  if(half===undefined) half = state.rounds[activeIndex()] ? state.rounds[activeIndex()].halfIdx : currentHalf();
+  const oldGK=state.gkByHalf[half];
+  state.gkByHalf[half]=newGK;
   if(newGK===oldGK) return;
   // Switch takes effect from the segment the CLOCK is currently in (real time played), NOT
   // activeIndex — substitutions are manual so activeIndex can lag the clock, but the old
@@ -1090,10 +1100,10 @@ function changeKeeper(newGK){
   let switchFrom=0;
   for(let i=0;i<state.rounds.length;i++){ if(state.rounds[i].atMin <= em+1e-6) switchFrom=i; }
   state.rounds.forEach((r,i)=>{
+    if(r.halfIdx!==half) return;   // only this half's segments are affected
     // Segments already played (before the clock's current one) keep their real keeper; the
-    // current segment and everything after it get the new keeper. The Game plan grid and
-    // time accounting read r.gk per segment, so a mid-game switch shows the old keeper up to
-    // the switch point and the new keeper from there on.
+    // current segment and everything after it (within this half) get the new keeper. The
+    // Game plan grid and time accounting read r.gk per segment.
     if(i>=switchFrom) r.gk=newGK;
     if(i<switchFrom) return;     // don't rewrite the outfield of already-played segments
     const idx=r.field.findIndex(x=>x.name===newGK);
@@ -1117,26 +1127,28 @@ function changeKeeper(newGK){
 }
 
 function renderGkPick(){
-  // The keeper applies to the WHOLE game (both halves) — a goalkeeper is never part of the
-  // outfield rotation. gkByHalf[0] and gkByHalf[1] are kept in sync.
-  const gk=state.gkByHalf[0];
-  $("#halfbadge").textContent = gk ? gk : "none picked";
+  // Per-half keeper: the picker changes the keeper for the half the game is CURRENTLY in.
+  // The other half keeps its own keeper. A goalkeeper is kept out of the outfield rotation
+  // for the half they keep.
+  const half = state.rounds[activeIndex()] ? state.rounds[activeIndex()].halfIdx : currentHalf();
+  const gk = state.gkByHalf[half];
+  $("#halfbadge").textContent = (half===0 ? "1st half" : "2nd half") + (gk ? " · "+gk : "");
   const box=$("#gkpick"); box.innerHTML="";
   availablePlayers().forEach(name=>{
     const b=el("button",null,name);
     if(gk===name) b.classList.add("sel");
     b.onclick=()=>{
       const picked=(gk===name ? null : name);
-      // Change the keeper for the WHOLE game WITHOUT disturbing the rotation schedule:
-      // the active segment and all boundaries/activeIndex stay put. We only swap the keeper
-      // out of the outfield in every round (the previous keeper takes their outfield slots).
-      changeKeeper(picked);
+      // Change THIS half's keeper without disturbing the rotation schedule: boundaries and
+      // activeIndex stay put; we only pull the keeper out of this half's outfield from the
+      // current segment on (the previous keeper takes their outfield slots).
+      changeKeeper(picked, half);
       save(); renderGame();
     };
     box.appendChild(b);
   });
   if(!gk){
-    box.appendChild(el("div","hint","No goalkeeper picked. The schedule below shows outfield only until you pick one."));
+    box.appendChild(el("div","hint","No keeper picked for this half yet. The schedule shows outfield only until you pick one."));
   }
 }
 
@@ -1472,6 +1484,16 @@ function tick(){
       toast(`⏰ Substitution due at ${Math.round(r.atMin)} min — press “Do substitution now”`);
     }
   }
+  // HALF-TIME: at the exact midpoint of the game, automatically pause the clock (once).
+  // Half-time is always gameLen/2. The coach presses Start/Resume to begin the 2nd half.
+  const midSec=state.gameLen*60/2;
+  if(!state.halftimePaused && state.elapsed>=midSec && state.gameLen>0){
+    state.elapsed=midSec; state.halftimePaused=true; pauseClock();
+    beep(); vibrate([300,150,300]);
+    toast("⏸ Half-time — clock paused. Press Resume for the 2nd half.");
+    renderClock(); renderField(); renderNextSub(); renderRoster(); save();
+    return;
+  }
   // stop at full time
   if(state.elapsed/60>=state.gameLen){ state.elapsed=state.gameLen*60; pauseClock(); toast("🏁 Full time"); }
 
@@ -1515,30 +1537,19 @@ function init(){
   $("#gamelen").addEventListener("input",()=>{updateRoundHint();validateSetup();});
   $("#interval").addEventListener("input",()=>{updateRoundHint();validateSetup();});
   // Do substitution now: APPLY the next planned rotation to the field AT THE CURRENT MOMENT,
-  // then RE-PLAN all remaining rotations off the real elapsed time and real field-time totals
-  // so equal playing time is maintained no matter how early or late the coach actually subs.
-  // The clock is NEVER tied to the substitution — it keeps running independently.
+  // "Do substitution now" simply APPLIES the next PLANNED rotation — it advances to the next
+  // scheduled segment's lineup. It does NOT re-plan: the schedule was already balanced for
+  // equal time, so following it as planned keeps it fair. (Re-planning happens only on a
+  // manual player swap or an injury/return — see manualSub / toggleInjured.) The clock runs
+  // independently and is never tied to the substitution.
   $("#doSub").onclick=()=>{
     const ai=activeIndex();
     if(ai>=state.rounds.length-1){ toast("No more substitutions — current lineup plays on."); return; }
-    const nextRound = state.rounds[ai+1];
-    const nextOutfield = nextRound.field.map(x=>({name:x.name,pos:x.pos}));
-    // the scheduled segment NUMBER of the rotation we're applying — pressing early consumes it,
-    // so the rebuild must not re-interrupt the new lineup at that boundary.
-    const segCount=Math.max(1,Math.round(state.gameLen/state.interval));
-    const consumeSegNum=Math.round(nextRound.atMin/(state.gameLen/segCount));
-    if(state.elapsed <= state.rounds[0].atMin*60 + 1){
-      // kickoff: nothing has elapsed, just move onto the next planned segment directly
-      state.activeIndex=ai+1;
-    } else {
-      // install the next planned lineup now and re-balance the rest from the live clock.
-      // consumeSegNum makes an EARLY press count as that rotation (next one re-spaces from now).
-      rebuildFromNow({applyLineup: nextOutfield, consumeSegNum});
-    }
-    lastRoundSeen=currentRoundIndex();   // clear the "due" alert for the rotation just made
+    state.activeIndex=ai+1;                 // step onto the next planned rotation, as planned
+    lastRoundSeen=currentRoundIndex();       // clear the "due" alert for the rotation just made
     beep(); vibrate([200,100,200]);
     renderGame(); save();
-    toast("Substitution done — remaining rotations re-balanced for equal time");
+    toast("Substitution done — on to the next planned rotation.");
   };
   $("#backBtn").onclick=()=>{ pauseClock(); $("#game").classList.add("hidden"); $("#setup").classList.remove("hidden"); fillSetupFromState(); };
 
