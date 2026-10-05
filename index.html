@@ -1083,7 +1083,19 @@ function changeKeeper(newGK){
   const oldGK=state.gkByHalf[0];
   state.gkByHalf[0]=newGK; state.gkByHalf[1]=newGK;
   if(newGK===oldGK) return;
-  state.rounds.forEach(r=>{
+  // Switch takes effect from the segment the CLOCK is currently in (real time played), NOT
+  // activeIndex — substitutions are manual so activeIndex can lag the clock, but the old
+  // keeper really did keep goal for every segment whose time window has already elapsed.
+  const em=state.elapsed/60;
+  let switchFrom=0;
+  for(let i=0;i<state.rounds.length;i++){ if(state.rounds[i].atMin <= em+1e-6) switchFrom=i; }
+  state.rounds.forEach((r,i)=>{
+    // Segments already played (before the clock's current one) keep their real keeper; the
+    // current segment and everything after it get the new keeper. The Game plan grid and
+    // time accounting read r.gk per segment, so a mid-game switch shows the old keeper up to
+    // the switch point and the new keeper from there on.
+    if(i>=switchFrom) r.gk=newGK;
+    if(i<switchFrom) return;     // don't rewrite the outfield of already-played segments
     const idx=r.field.findIndex(x=>x.name===newGK);
     if(idx<0) return; // new keeper wasn't scheduled to play outfield this round — nothing to do
     const pos=r.field[idx].pos;
@@ -1233,7 +1245,7 @@ function computeTimes(){
     const segEnd = (i<ai) ? state.rounds[i+1].atMin*60 : state.elapsed; // active seg -> now
     const played=Math.max(0, Math.min(state.elapsed, segEnd) - segStart);
     if(played<=0) continue;
-    const gkName = state.gkByHalf[r.halfIdx] || r.gk;
+    const gkName = r.gk || state.gkByHalf[r.halfIdx];
     if(gkName && field[gkName]!==undefined) gk[gkName]+=played;
     r.field.forEach(x=>{ if(x.name!==gkName && field[x.name]!==undefined) field[x.name]+=played; });
   }
@@ -1301,7 +1313,7 @@ function renderNextSub(){
   // lineup) and the next segment's lineup — so this panel shows exactly what the
   // "Do substitution now" button will apply, even if the field is lagging the clock.
   const curOut = activeLineup().line.map(p=>p.name);
-  const nextGk = state.gkByHalf[r.halfIdx] || r.gk;
+  const nextGk = r.gk || state.gkByHalf[r.halfIdx];
   const nextOn = [nextGk, ...r.field.filter(x=>x.name!==nextGk).map(x=>x.name)].filter(Boolean);
   const curSet=new Set(curOut), nextSet=new Set(nextOn);
   const comingOff=curOut.filter(n=>!nextSet.has(n));
@@ -1382,7 +1394,7 @@ function renderPlan(){
   const inj=state.injured||[];
   // precompute each segment's sides + GK
   const segInfo=state.rounds.map(r=>{
-    const gkName=state.gkByHalf[r.halfIdx]||r.gk;
+    const gkName=r.gk||state.gkByHalf[r.halfIdx];
     // build the on-pitch lineup for this segment: GK + outfield (excluding GK, excluding injured)
     const outfield=r.field.filter(x=>x.name!==gkName);
     const sides=sideLabels(outfield);
