@@ -1395,7 +1395,13 @@ function renderPlan(){
     return {gkName, posOf, lineOf};
   });
   const tbl=el("table","plan");
-  // header row: Player + each segment's start minute
+  // Real planned minutes per segment (next boundary minus this one; last runs to full time),
+  // used for the per-player Total column so the GK is credited their actual time in goal.
+  const segLenMin=state.rounds.map((r,i)=>{
+    const end = (i<state.rounds.length-1) ? state.rounds[i+1].atMin : state.gameLen;
+    return Math.max(0, end - r.atMin);
+  });
+  // header row: Player + each segment's start minute + Total
   const thead=el("thead"); const htr=el("tr");
   htr.appendChild(Object.assign(el("th",null,"Player"),{className:"pname"}));
   state.rounds.forEach((r,i)=>{
@@ -1403,21 +1409,25 @@ function renderPlan(){
     const th=el("th",cls, Math.round(r.atMin)+"'" + (i===clockIdx && clockIdx>curIdx ? " ⏰" : ""));
     htr.appendChild(th);
   });
+  htr.appendChild(Object.assign(el("th",null,"Total"),{className:"time"}));
   thead.appendChild(htr); tbl.appendChild(thead);
   const tbody=el("tbody");
   state.players.forEach(name=>{
     const tr=el("tr");
     const pn=el("td","pname",(inj.includes(name)?"🚑 ":"")+name); tr.appendChild(pn);
+    let totalMin=0;
     segInfo.forEach((si,i)=>{
       const injuredThisSeg = inj.includes(name); // injuries aren't time-stamped per seg; mark current status
       const pos=si.posOf[name];
       let cls="", txt="";
-      if(pos){ cls="cell-"+si.lineOf[name]; txt=pos; }
+      if(pos){ cls="cell-"+si.lineOf[name]; txt=pos; totalMin+=segLenMin[i]; } // GK or outfield -> counts as real time
       else { cls="bench"; txt="·"; }
       if(i===curIdx) cls+=" cur";
       const td=el("td",cls,txt);
       tr.appendChild(td);
     });
+    // Total = this player's REAL planned time across the game (GK time included for the keeper).
+    tr.appendChild(Object.assign(el("td","time", fmt(Math.round(totalMin*60))),{}));
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
