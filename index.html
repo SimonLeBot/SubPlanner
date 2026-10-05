@@ -1056,6 +1056,37 @@ function renderGame(){
   renderFooter();
 }
 
+// Change the goalkeeper for the WHOLE game WITHOUT re-planning or advancing the rotation.
+// The schedule (boundaries, activeIndex, who rotates when) is preserved exactly; we only
+// move the new keeper OUT of the outfield in every round and give their vacated outfield
+// slots to the previous keeper (who was out of the rotation while they kept goal). Passing
+// null clears the keeper (everyone returns to the outfield pool). This is deliberately NOT
+// rebuildFromNow: a keeper change must never consume a pending rotation or re-space the plan.
+function changeKeeper(newGK){
+  const oldGK=state.gkByHalf[0];
+  state.gkByHalf[0]=newGK; state.gkByHalf[1]=newGK;
+  if(newGK===oldGK) return;
+  state.rounds.forEach(r=>{
+    const idx=r.field.findIndex(x=>x.name===newGK);
+    if(idx<0) return; // new keeper wasn't scheduled to play outfield this round — nothing to do
+    const pos=r.field[idx].pos;
+    const onNames=new Set(r.field.map(x=>x.name));
+    let repl=null;
+    // Prefer giving the slot to the OLD keeper (they're now back in the outfield pool).
+    if(oldGK && oldGK!==newGK && !onNames.has(oldGK) && availablePlayers().includes(oldGK)){
+      repl=oldGK;
+    } else {
+      // otherwise the least-played available bench player not already on this round
+      const sched=(state.built && state.built.outSegments) || {};
+      const bench=availablePlayers().filter(p=>!onNames.has(p) && p!==newGK)
+        .sort((a,b)=>(sched[a]||0)-(sched[b]||0) || cmpName(a,b));
+      repl=bench[0]||null;
+    }
+    if(repl) r.field[idx]={name:repl, pos};
+    else r.field.splice(idx,1); // no replacement available: leave the slot open (rare)
+  });
+}
+
 function renderGkPick(){
   // The keeper applies to the WHOLE game (both halves) — a goalkeeper is never part of the
   // outfield rotation. gkByHalf[0] and gkByHalf[1] are kept in sync.
@@ -1067,11 +1098,10 @@ function renderGkPick(){
     if(gk===name) b.classList.add("sel");
     b.onclick=()=>{
       const picked=(gk===name ? null : name);
-      // Apply to the whole game and re-plan so the keeper is pulled out of the outfield
-      // rotation (slot backfilled) and never rotated back onto the field. Clearing just
-      // re-renders — nothing to exclude.
-      state.gkByHalf[0]=picked; state.gkByHalf[1]=picked;
-      if(picked){ rebuildFromNow(); }
+      // Change the keeper for the WHOLE game WITHOUT disturbing the rotation schedule:
+      // the active segment and all boundaries/activeIndex stay put. We only swap the keeper
+      // out of the outfield in every round (the previous keeper takes their outfield slots).
+      changeKeeper(picked);
       save(); renderGame();
     };
     box.appendChild(b);
