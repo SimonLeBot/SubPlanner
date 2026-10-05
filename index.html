@@ -250,13 +250,9 @@ Bella</textarea>
       <div class="nextbar" id="nextbar"></div>
       <div class="btnrow">
         <button class="primary" id="startstop">Start</button>
-        <button class="ghost" id="halftime">⏸ Half-time</button>
-        <button class="ghost" id="resetclock">Reset clock</button>
       </div>
       <div class="btnrow">
-        <button class="ghost" id="prevSub">◀ Prev</button>
         <button class="warn" id="doSub">Do substitution now</button>
-        <button class="ghost" id="nextSub">Next ▶</button>
       </div>
     </div>
 
@@ -1461,13 +1457,9 @@ function init(){
   // throws, Start and the other controls are always clickable.
   $("#startBtn").onclick=startGame;
   $("#startstop").onclick=()=>{ state.running?pauseClock():startClock(); };
-  // Half-time: stop the clock at the break. Just pauses the running clock and flags the
-  // break — it does not change the lineup or jump time. Resume with Start when play restarts.
-  $("#halftime").onclick=()=>{ pauseClock(); beep(); vibrate([300,150,300]); toast("⏸ Half-time — clock stopped. Press Resume to start the 2nd half."); };
   $("#players").addEventListener("input",()=>{ const n=parsePlayers().length; $("#playercount").textContent=`${n} player${n===1?"":"s"}`; renderSetupGk(); validateSetup(); });
   $("#gamelen").addEventListener("input",()=>{updateRoundHint();validateSetup();});
   $("#interval").addEventListener("input",()=>{updateRoundHint();validateSetup();});
-  $("#resetclock").onclick=()=>{ pauseClock(); state.elapsed=0; state.activeIndex=0; lastRoundSeen=-1; state.players.forEach(p=>{ state.playTime[p]=0; state.gkTime[p]=0; }); renderGame(); save(); };
   // Do substitution now: APPLY the next planned rotation to the field AT THE CURRENT MOMENT,
   // then RE-PLAN all remaining rotations off the real elapsed time and real field-time totals
   // so equal playing time is maintained no matter how early or late the coach actually subs.
@@ -1494,11 +1486,6 @@ function init(){
     renderGame(); save();
     toast("Substitution done — remaining rotations re-balanced for equal time");
   };
-  // Prev / Next REVIEW the lineup on the field (move activeIndex) without moving the clock —
-  // handy to step back if you actioned a sub early, or peek ahead. Time played always
-  // reflects wherever the field is left.
-  $("#prevSub").onclick=()=>{ const ai=activeIndex(); if(ai>0){ state.activeIndex=ai-1; renderGame(); save(); } };
-  $("#nextSub").onclick=()=>{ const ai=activeIndex(); if(ai<state.rounds.length-1){ state.activeIndex=ai+1; renderGame(); save(); } };
   $("#backBtn").onclick=()=>{ pauseClock(); $("#game").classList.add("hidden"); $("#setup").classList.remove("hidden"); fillSetupFromState(); };
   $("#newGame").onclick=()=>{ if(confirm("End this game and start fresh?")){ pauseClock(); localStorage.removeItem(LS_KEY); location.reload(); } };
 
