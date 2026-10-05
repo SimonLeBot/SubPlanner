@@ -188,7 +188,7 @@ Bella</textarea>
       <div class="preset" id="presets"></div>
       <div id="formrows"></div>
       <div class="tacticsum" id="tacticsum"></div>
-      <div class="hint">Total on field includes 1 goalkeeper. Pick your goalkeeper(s) below before starting; you can change the keeper during the game too.</div>
+      <div class="hint">Total on field includes 1 goalkeeper. Pick your goalkeeper below before starting; you can change the keeper during the game too.</div>
     </div>
 
     <div class="card">
@@ -208,11 +208,9 @@ Bella</textarea>
 
     <div class="card">
       <h2>4 &middot; Goalkeeper <span class="pill pos-GK">required</span></h2>
-      <label>1st half goalkeeper</label>
+      <label>Goalkeeper</label>
       <div class="gkpick" id="setupGk1"></div>
-      <label style="margin-top:12px;">2nd half goalkeeper <span style="font-weight:400;">(optional — defaults to the 1st-half keeper)</span></label>
-      <div class="gkpick" id="setupGk2"></div>
-      <div class="hint">The keeper plays goal the whole half and is kept out of the outfield rotation. You can still change the keeper during the game.</div>
+      <div class="hint">Pick one keeper to start. They're kept out of the outfield rotation while in goal. You can change the keeper any time during the game (including at half-time) from the in-game Goalkeeper picker.</div>
     </div>
 
     <div id="setupwarn"></div>
@@ -455,18 +453,22 @@ function updateRoundHint(){
 // Render the goalkeeper picker on the SETUP screen (half 0 required, half 1 optional).
 function renderSetupGk(){
   const players=parsePlayers();
-  [["setupGk1",0],["setupGk2",1]].forEach(([id,half])=>{
-    const box=$("#"+id); if(!box) return; box.innerHTML="";
-    // drop any previously-picked GK that is no longer in the roster
-    if(state.gkByHalf[half] && !players.includes(state.gkByHalf[half])) state.gkByHalf[half]=null;
-    players.forEach(name=>{
-      const b=el("button",null,name);
-      if(state.gkByHalf[half]===name) b.classList.add("sel");
-      b.onclick=()=>{ state.gkByHalf[half]=(state.gkByHalf[half]===name?null:name); renderSetupGk(); validateSetup(); };
-      box.appendChild(b);
-    });
-    if(players.length===0) box.appendChild(el("div","hint","Add players above first."));
+  const box=$("#setupGk1"); if(!box) return; box.innerHTML="";
+  // single keeper picker: the chosen keeper applies to the whole game (both halves).
+  // drop a previously-picked GK that is no longer in the roster.
+  if(state.gkByHalf[0] && !players.includes(state.gkByHalf[0])) state.gkByHalf[0]=null;
+  players.forEach(name=>{
+    const b=el("button",null,name);
+    if(state.gkByHalf[0]===name) b.classList.add("sel");
+    b.onclick=()=>{
+      const picked=(state.gkByHalf[0]===name?null:name);
+      // apply to both halves — the 2nd-half keeper can still be changed in-game.
+      state.gkByHalf[0]=picked; state.gkByHalf[1]=picked;
+      renderSetupGk(); validateSetup();
+    };
+    box.appendChild(b);
   });
+  if(players.length===0) box.appendChild(el("div","hint","Add players above first."));
 }
 function validateSetup(){
   const warn=$("#setupwarn"); warn.innerHTML="";
@@ -479,7 +481,7 @@ function validateSetup(){
   if(len<=0) msgs.push("Game length must be greater than 0.");
   if(iv<=0) msgs.push("Rotation interval must be greater than 0.");
   if(iv>len) msgs.push("Rotation interval is longer than the game.");
-  if(!state.gkByHalf[0]) msgs.push("Pick a 1st-half goalkeeper (section 4) before starting.");
+  if(!state.gkByHalf[0]) msgs.push("Pick a goalkeeper (section 4) before starting.");
   const ok = msgs.length===0;
   if(!ok){ warn.innerHTML=`<div class="warnbox">⚠ ${msgs.join("<br>")}</div>`; }
   else if(players.length===n){
