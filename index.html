@@ -222,11 +222,11 @@ Bella</textarea>
   <section id="game" class="hidden">
     <div class="card">
       <div class="foldhdr" onclick="toggleGkPanel()">
-        <h2 style="margin:0;">Goalkeeper &middot; <span class="half-badge" id="halfbadge">1st half</span></h2>
+        <h2 style="margin:0;">Goalkeeper &middot; <span class="half-badge" id="halfbadge">none picked</span></h2>
         <span class="chev" id="gkchev">▾</span>
       </div>
       <div id="gkbody">
-        <div class="hint">Pick who keeps goal this half. They stay in goal the whole half; outfield time is balanced across everyone else.</div>
+        <div class="hint">Pick who keeps goal. They stay in goal for the whole game and are kept out of the outfield rotation; outfield time is balanced across everyone else. Change this any time to swap keepers.</div>
         <div class="gkpick" id="gkpick"></div>
       </div>
     </div>
@@ -1072,27 +1072,27 @@ function renderGame(){
 }
 
 function renderGkPick(){
-  const half=state.rounds[activeIndex()] ? state.rounds[activeIndex()].halfIdx : currentHalf();
-  $("#halfbadge").textContent = half===0 ? "1st half" : "2nd half";
+  // The keeper applies to the WHOLE game (both halves) — a goalkeeper is never part of the
+  // outfield rotation. gkByHalf[0] and gkByHalf[1] are kept in sync.
+  const gk=state.gkByHalf[0];
+  $("#halfbadge").textContent = gk ? gk : "none picked";
   const box=$("#gkpick"); box.innerHTML="";
   availablePlayers().forEach(name=>{
     const b=el("button",null,name);
-    if(state.gkByHalf[half]===name) b.classList.add("sel");
+    if(gk===name) b.classList.add("sel");
     b.onclick=()=>{
-      const prev=state.gkByHalf[half];
-      const picked=(prev===name ? null : name);
-      state.gkByHalf[half]=picked;
-      // A newly-selected keeper must NEVER remain in the scheduled outfield rotation.
-      // Re-plan the remaining rounds so the engine pulls them out of the outfield pool
-      // (their vacated slot is backfilled) and they are never rotated back onto the field.
-      // Clearing the keeper (picked===null) just re-renders — nothing to exclude.
+      const picked=(gk===name ? null : name);
+      // Apply to the whole game and re-plan so the keeper is pulled out of the outfield
+      // rotation (slot backfilled) and never rotated back onto the field. Clearing just
+      // re-renders — nothing to exclude.
+      state.gkByHalf[0]=picked; state.gkByHalf[1]=picked;
       if(picked){ rebuildFromNow(); }
       save(); renderGame();
     };
     box.appendChild(b);
   });
-  if(!state.gkByHalf[half]){
-    box.appendChild(el("div","hint","No GK picked for this half yet. The schedule below shows outfield only until you pick one."));
+  if(!gk){
+    box.appendChild(el("div","hint","No goalkeeper picked. The schedule below shows outfield only until you pick one."));
   }
 }
 
