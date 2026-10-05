@@ -1082,7 +1082,17 @@ function renderGkPick(){
   availablePlayers().forEach(name=>{
     const b=el("button",null,name);
     if(state.gkByHalf[half]===name) b.classList.add("sel");
-    b.onclick=()=>{ state.gkByHalf[half]=(state.gkByHalf[half]===name?null:name); save(); renderGame(); };
+    b.onclick=()=>{
+      const prev=state.gkByHalf[half];
+      const picked=(prev===name ? null : name);
+      state.gkByHalf[half]=picked;
+      // A newly-selected keeper must NEVER remain in the scheduled outfield rotation.
+      // Re-plan the remaining rounds so the engine pulls them out of the outfield pool
+      // (their vacated slot is backfilled) and they are never rotated back onto the field.
+      // Clearing the keeper (picked===null) just re-renders — nothing to exclude.
+      if(picked){ rebuildFromNow(); }
+      save(); renderGame();
+    };
     box.appendChild(b);
   });
   if(!state.gkByHalf[half]){
